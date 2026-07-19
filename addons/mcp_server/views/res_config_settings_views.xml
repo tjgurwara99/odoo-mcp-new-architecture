@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_mcp" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.mcp</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app data-string="MCP Server" string="MCP Server" name="mcp_server"
+                     logo="/mcp_server/static/description/icon.png">
+                    <block title="Protocol &amp; Transport" name="mcp_protocol">
+                        <setting string="Enable MCP Server" help="Master switch for the /mcp endpoint.">
+                            <field name="mcp_enabled"/>
+                        </setting>
+                        <setting string="Public Base URL"
+                                 help="External HTTPS URL used for OAuth metadata and RFC 8707 audience validation.">
+                            <field name="mcp_server_url" placeholder="https://erp.example.com"/>
+                        </setting>
+                        <setting string="Require Resource Indicator (RFC 8707)"
+                                 help="Reject access tokens not bound to this MCP resource.">
+                            <field name="mcp_require_resource_indicator"/>
+                        </setting>
+                    </block>
+                    <block title="OAuth" name="mcp_oauth">
+                        <setting string="Open Dynamic Client Registration"
+                                 help="Allow clients (e.g. Claude) to self-register.">
+                            <field name="mcp_dcr_open"/>
+                        </setting>
+                        <setting string="Access Token TTL (s)">
+                            <field name="mcp_access_token_ttl"/>
+                        </setting>
+                        <setting string="Refresh Token TTL (s)">
+                            <field name="mcp_refresh_token_ttl"/>
+                        </setting>
+                    </block>
+                    <block title="Safety &amp; Audit" name="mcp_safety">
+                        <setting string="Confirmation Token TTL (s)"
+                                 help="Lifetime of propose/confirm tokens for write tools.">
+                            <field name="mcp_confirmation_ttl"/>
+                        </setting>
+                        <setting string="Alert on Sensitive Actions">
+                            <field name="mcp_enable_alerts"/>
+                        </setting>
+                        <setting string="Sensitive Categories">
+                            <field name="mcp_sensitive_categories"/>
+                        </setting>
+                        <setting string="Sensitive Tool Prefixes">
+                            <field name="mcp_sensitive_tool_prefixes"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="action_mcp_config_settings" model="ir.actions.act_window">
+        <field name="name">MCP Settings</field>
+        <field name="res_model">res.config.settings</field>
+        <field name="view_mode">form</field>
+        <field name="target">inline</field>
+        <field name="context">{'module': 'mcp_server'}</field>
+    </record>
+</odoo>

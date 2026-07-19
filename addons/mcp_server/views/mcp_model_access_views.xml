@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_mcp_model_access" model="ir.actions.act_window">
+        <field name="name">Model Allowlist</field>
+        <field name="res_model">mcp.model.access</field>
+        <field name="view_mode">tree,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">Expose a model to the generic engine</p>
+            <p>Add models here to let the generic <code>odoo.*</code> tools work with them.
+               Standard Odoo ACL and record rules still apply on every call.</p>
+        </field>
+    </record>
+
+    <record id="view_mcp_model_access_tree" model="ir.ui.view">
+        <field name="name">mcp.model.access.tree</field>
+        <field name="model">mcp.model.access</field>
+        <field name="arch" type="xml">
+            <tree editable="bottom">
+                <field name="model_id"/>
+                <field name="allow_read"/>
+                <field name="allow_search"/>
+                <field name="allow_create"/>
+                <field name="allow_write"/>
+                <field name="allow_unlink"/>
+                <field name="allow_action"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_mcp_model_access_form" model="ir.ui.view">
+        <field name="name">mcp.model.access.form</field>
+        <field name="model">mcp.model.access</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="model_id"/>
+                            <field name="model_name" readonly="1"/>
+                            <field name="active"/>
+                        </group>
+                        <group string="Operations">
+                            <field name="allow_read"/>
+                            <field name="allow_search"/>
+                            <field name="allow_create"/>
+                            <field name="allow_write"/>
+                            <field name="allow_unlink"/>
+                            <field name="allow_action"/>
+                        </group>
+                    </group>
+                    <group string="Field &amp; Action Whitelists">
+                        <field name="allowed_fields"
+                               placeholder="Leave empty for all accessible fields"/>
+                        <field name="writable_fields"
+                               placeholder="Leave empty to mirror allowed fields"/>
+                        <field name="allowed_actions"
+                               placeholder="action_confirm, button_cancel"/>
+                        <field name="domain_filter"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

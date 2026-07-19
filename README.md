@@ -18,4 +18,29 @@ See [PLAN.md](./PLAN.md) for the full architecture and delivery plan.
 
 ## Status
 
-Planning complete. Implementation starting at Phase 0 (scaffolding).
+**Core module `mcp_server` implemented** (PLAN.md Phases 1–4):
+
+- MCP Streamable HTTP transport (JSON-RPC 2.0) at `POST /mcp`, `DELETE /mcp`
+  session teardown, pinned protocol version `2025-06-18` (no batching).
+- Two error channels: protocol errors as JSON-RPC `error`; tool errors as
+  successful results with `isError: true`.
+- OAuth 2.1 AS + Resource Server: DCR, Authorization Code + PKCE (S256),
+  refresh-token rotation, RFC 8707 resource-indicator binding, RFC 7009 revoke,
+  `.well-known` metadata. Secrets hashed at rest.
+- Import-time tool/resource registry for domain add-ons.
+- Generic model engine (`odoo.*`) gated by the `mcp.model.access` allowlist plus
+  real Odoo ACL/record rules.
+- Propose → confirm workflow for all writes (single-use, user-bound tokens).
+- Full audit log with pivot/graph views and sensitive-action alerting.
+- Admin UI (Settings + dedicated MCP app menu) and cron GC jobs.
+- Test suite (`addons/mcp_server/tests/`) covering JSON-RPC, schema, protocol
+  error channels, confirmation flow, generic engine, OAuth/PKCE, and audit.
+
+Run tests:
+
+```bash
+odoo -d <db> -i mcp_server --test-enable --stop-after-init
+```
+
+Domain add-ons (`mcp_server_sales`, `_accounting`, `_inventory`, `_contacts`)
+are the next phase (PLAN.md Phase 5).

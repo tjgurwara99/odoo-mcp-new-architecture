@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <record id="cron_gc_auth_codes" model="ir.cron">
+            <field name="name">MCP: purge expired authorization codes</field>
+            <field name="model_id" ref="model_mcp_oauth_auth_code"/>
+            <field name="state">code</field>
+            <field name="code">model._gc()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="cron_gc_tokens" model="ir.cron">
+            <field name="name">MCP: purge revoked/expired tokens</field>
+            <field name="model_id" ref="model_mcp_oauth_token"/>
+            <field name="state">code</field>
+            <field name="code">model._gc()</field>
+            <field name="interval_number">6</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="cron_gc_confirmations" model="ir.cron">
+            <field name="name">MCP: purge expired confirmation tokens</field>
+            <field name="model_id" ref="model_mcp_action_confirmation"/>
+            <field name="state">code</field>
+            <field name="code">model._gc()</field>
+            <field name="interval_number">30</field>
+            <field name="interval_type">minutes</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+        </record>
+
+        <record id="cron_gc_sessions" model="ir.cron">
+            <field name="name">MCP: close stale sessions</field>
+            <field name="model_id" ref="model_mcp_session"/>
+            <field name="state">code</field>
+            <field name="code">model._gc()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+        </record>
+    </data>
+</odoo>

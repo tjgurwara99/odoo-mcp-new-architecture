@@ -1,0 +1,102 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_mcp_audit_log" model="ir.actions.act_window">
+        <field name="name">MCP Audit Log</field>
+        <field name="res_model">mcp.audit.log</field>
+        <field name="view_mode">tree,form,pivot,graph</field>
+    </record>
+
+    <record id="view_mcp_audit_log_tree" model="ir.ui.view">
+        <field name="name">mcp.audit.log.tree</field>
+        <field name="model">mcp.audit.log</field>
+        <field name="arch" type="xml">
+            <tree decoration-danger="is_error" create="false">
+                <field name="create_date"/>
+                <field name="user_id"/>
+                <field name="tool_name"/>
+                <field name="category"/>
+                <field name="result_note"/>
+                <field name="is_error"/>
+                <field name="duration_ms"/>
+                <field name="oauth_client_id"/>
+                <field name="ip"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_mcp_audit_log_form" model="ir.ui.view">
+        <field name="name">mcp.audit.log.form</field>
+        <field name="model">mcp.audit.log</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="create_date"/>
+                            <field name="user_id"/>
+                            <field name="tool_name"/>
+                            <field name="category"/>
+                            <field name="is_error"/>
+                            <field name="result_note"/>
+                        </group>
+                        <group>
+                            <field name="oauth_client_id"/>
+                            <field name="session_id"/>
+                            <field name="duration_ms"/>
+                            <field name="ip"/>
+                            <field name="user_agent"/>
+                            <field name="confirmation_token"/>
+                        </group>
+                    </group>
+                    <group string="Arguments">
+                        <field name="arguments" nolabel="1"/>
+                    </group>
+                    <group string="Result / Error">
+                        <field name="result_summary" nolabel="1"/>
+                        <field name="error" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_mcp_audit_log_search" model="ir.ui.view">
+        <field name="name">mcp.audit.log.search</field>
+        <field name="model">mcp.audit.log</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="tool_name"/>
+                <field name="user_id"/>
+                <field name="oauth_client_id"/>
+                <filter name="errors" string="Errors" domain="[('is_error','=',True)]"/>
+                <filter name="writes" string="Writes" domain="[('category','=','write')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_tool" string="Tool" context="{'group_by':'tool_name'}"/>
+                    <filter name="group_user" string="User" context="{'group_by':'user_id'}"/>
+                    <filter name="group_cat" string="Category" context="{'group_by':'category'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="view_mcp_audit_log_pivot" model="ir.ui.view">
+        <field name="name">mcp.audit.log.pivot</field>
+        <field name="model">mcp.audit.log</field>
+        <field name="arch" type="xml">
+            <pivot>
+                <field name="tool_name" type="row"/>
+                <field name="is_error" type="col"/>
+            </pivot>
+        </field>
+    </record>
+
+    <record id="view_mcp_audit_log_graph" model="ir.ui.view">
+        <field name="name">mcp.audit.log.graph</field>
+        <field name="model">mcp.audit.log</field>
+        <field name="arch" type="xml">
+            <graph>
+                <field name="tool_name"/>
+            </graph>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_mcp_session" model="ir.actions.act_window">
+        <field name="name">MCP Sessions</field>
+        <field name="res_model">mcp.session</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="view_mcp_session_tree" model="ir.ui.view">
+        <field name="name">mcp.session.tree</field>
+        <field name="model">mcp.session</field>
+        <field name="arch" type="xml">
+            <tree create="false" decoration-muted="state == 'closed'">
+                <field name="session_id"/>
+                <field name="user_id"/>
+                <field name="client_name"/>
+                <field name="protocol_version"/>
+                <field name="state"/>
+                <field name="last_seen"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_mcp_session_form" model="ir.ui.view">
+        <field name="name">mcp.session.form</field>
+        <field name="model">mcp.session</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="session_id"/>
+                            <field name="user_id"/>
+                            <field name="token_id"/>
+                        </group>
+                        <group>
+                            <field name="client_name"/>
+                            <field name="client_version"/>
+                            <field name="protocol_version"/>
+                            <field name="state"/>
+                            <field name="last_seen"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

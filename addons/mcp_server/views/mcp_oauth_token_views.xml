@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_mcp_oauth_token" model="ir.actions.act_window">
+        <field name="name">OAuth Tokens</field>
+        <field name="res_model">mcp.oauth.token</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="view_mcp_oauth_token_tree" model="ir.ui.view">
+        <field name="name">mcp.oauth.token.tree</field>
+        <field name="model">mcp.oauth.token</field>
+        <field name="arch" type="xml">
+            <tree decoration-muted="revoked">
+                <field name="user_id"/>
+                <field name="client_id_ref"/>
+                <field name="scope"/>
+                <field name="resource"/>
+                <field name="access_expires_at"/>
+                <field name="refresh_expires_at"/>
+                <field name="last_used_at"/>
+                <field name="revoked"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_mcp_oauth_token_form" model="ir.ui.view">
+        <field name="name">mcp.oauth.token.form</field>
+        <field name="model">mcp.oauth.token</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="user_id"/>
+                            <field name="client_id_ref"/>
+                            <field name="scope"/>
+                            <field name="resource"/>
+                        </group>
+                        <group>
+                            <field name="access_expires_at"/>
+                            <field name="refresh_expires_at"/>
+                            <field name="last_used_at"/>
+                            <field name="revoked"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

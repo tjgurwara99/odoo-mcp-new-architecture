@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="1">
+        <!-- Default configuration parameters -->
+        <record id="param_mcp_enabled" model="ir.config_parameter">
+            <field name="key">mcp_server.enabled</field>
+            <field name="value">True</field>
+        </record>
+        <record id="param_mcp_require_resource" model="ir.config_parameter">
+            <field name="key">mcp_server.require_resource</field>
+            <field name="value">True</field>
+        </record>
+        <record id="param_mcp_dcr_open" model="ir.config_parameter">
+            <field name="key">mcp_server.dcr_open</field>
+            <field name="value">True</field>
+        </record>
+        <record id="param_mcp_allow_session_auth" model="ir.config_parameter">
+            <field name="key">mcp_server.allow_session_auth</field>
+            <field name="value">False</field>
+        </record>
+        <record id="param_mcp_access_ttl" model="ir.config_parameter">
+            <field name="key">mcp_server.access_token_ttl</field>
+            <field name="value">3600</field>
+        </record>
+        <record id="param_mcp_refresh_ttl" model="ir.config_parameter">
+            <field name="key">mcp_server.refresh_token_ttl</field>
+            <field name="value">2592000</field>
+        </record>
+        <record id="param_mcp_confirmation_ttl" model="ir.config_parameter">
+            <field name="key">mcp_server.confirmation_ttl</field>
+            <field name="value">300</field>
+        </record>
+        <record id="param_mcp_enable_alerts" model="ir.config_parameter">
+            <field name="key">mcp_server.enable_alerts</field>
+            <field name="value">False</field>
+        </record>
+        <record id="param_mcp_sensitive_categories" model="ir.config_parameter">
+            <field name="key">mcp_server.sensitive_categories</field>
+            <field name="value">write,admin</field>
+        </record>
+        <record id="param_mcp_sensitive_prefixes" model="ir.config_parameter">
+            <field name="key">mcp_server.sensitive_tool_prefixes</field>
+            <field name="value">accounting.,odoo.delete_record</field>
+        </record>
+    </data>
+</odoo>

@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <record id="module_category_mcp" model="ir.module.category">
+        <field name="name">MCP Server</field>
+        <field name="description">Model Context Protocol server access levels.</field>
+        <field name="sequence">20</field>
+    </record>
+
+    <record id="group_mcp_user" model="res.groups">
+        <field name="name">MCP User</field>
+        <field name="category_id" ref="module_category_mcp"/>
+        <field name="comment">
+            Baseline group for accounts reachable through the MCP connector.
+            Actual data access is still governed by normal Odoo ACL / record
+            rules; this group only gates MCP-specific visibility.
+        </field>
+    </record>
+
+    <record id="group_mcp_admin" model="res.groups">
+        <field name="name">MCP Administrator</field>
+        <field name="category_id" ref="module_category_mcp"/>
+        <field name="implied_ids" eval="[(4, ref('group_mcp_user'))]"/>
+        <field name="users" eval="[(4, ref('base.user_admin'))]"/>
+        <field name="comment">
+            Manage OAuth clients, the generic model allowlist, audit log and
+            MCP configuration.
+        </field>
+    </record>
+
+</odoo>

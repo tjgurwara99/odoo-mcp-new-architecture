@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- OAuth consent screen shown after the user authenticates via Odoo login. -->
+    <template id="oauth_consent" name="MCP OAuth Consent">
+        <t t-call="web.frontend_layout">
+            <t t-set="no_footer" t-value="1"/>
+            <div class="container" style="max-width: 520px; margin-top: 60px;">
+                <div class="card shadow-sm">
+                    <div class="card-body">
+                        <h3 class="card-title">Authorize connection</h3>
+                        <p>
+                            <strong t-esc="client.name"/> is requesting access to Odoo
+                            on behalf of <strong t-esc="user.name"/>.
+                        </p>
+                        <ul>
+                            <li>Requested scope: <code t-esc="scope"/></li>
+                            <li>Actions run strictly with your Odoo permissions.</li>
+                            <li>All write operations require an explicit confirmation step.</li>
+                            <li>Every action is recorded in the MCP audit log.</li>
+                        </ul>
+                        <form action="/mcp/oauth/authorize/decision" method="post">
+                            <input type="hidden" name="csrf_token" t-att-value="request.csrf_token()"/>
+                            <input type="hidden" name="client_id" t-att-value="params.get('client_id')"/>
+                            <input type="hidden" name="redirect_uri" t-att-value="params.get('redirect_uri')"/>
+                            <input type="hidden" name="response_type" t-att-value="params.get('response_type')"/>
+                            <input type="hidden" name="scope" t-att-value="params.get('scope')"/>
+                            <input type="hidden" name="state" t-att-value="params.get('state')"/>
+                            <input type="hidden" name="code_challenge" t-att-value="params.get('code_challenge')"/>
+                            <input type="hidden" name="code_challenge_method" t-att-value="params.get('code_challenge_method')"/>
+                            <input type="hidden" name="resource" t-att-value="params.get('resource')"/>
+                            <div class="d-flex justify-content-end gap-2 mt-4">
+                                <button type="submit" name="decision" value="deny"
+                                        class="btn btn-secondary">Deny</button>
+                                <button type="submit" name="decision" value="allow"
+                                        class="btn btn-primary">Allow</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </t>
+    </template>
+
+    <template id="oauth_error" name="MCP OAuth Error">
+        <t t-call="web.frontend_layout">
+            <t t-set="no_footer" t-value="1"/>
+            <div class="container" style="max-width: 520px; margin-top: 60px;">
+                <div class="alert alert-danger">
+                    <h4>Authorization error</h4>
+                    <p t-esc="message"/>
+                </div>
+            </div>
+        </t>
+    </template>
+</odoo>

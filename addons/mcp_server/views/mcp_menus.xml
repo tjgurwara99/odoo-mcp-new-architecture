@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <menuitem id="menu_mcp_root" name="MCP Server"
+              web_icon="mcp_server,static/description/icon.png"
+              sequence="90"
+              groups="group_mcp_admin"/>
+
+    <menuitem id="menu_mcp_config" name="Configuration"
+              parent="menu_mcp_root" sequence="10"/>
+    <menuitem id="menu_mcp_settings" name="Settings"
+              parent="menu_mcp_config" action="action_mcp_config_settings" sequence="1"/>
+    <menuitem id="menu_mcp_model_access" name="Model Allowlist"
+              parent="menu_mcp_config" action="action_mcp_model_access" sequence="2"/>
+
+    <menuitem id="menu_mcp_oauth" name="OAuth"
+              parent="menu_mcp_root" sequence="20"/>
+    <menuitem id="menu_mcp_oauth_client" name="Clients"
+              parent="menu_mcp_oauth" action="action_mcp_oauth_client" sequence="1"/>
+    <menuitem id="menu_mcp_oauth_token" name="Tokens"
+              parent="menu_mcp_oauth" action="action_mcp_oauth_token" sequence="2"/>
+
+    <menuitem id="menu_mcp_monitor" name="Monitoring"
+              parent="menu_mcp_root" sequence="30"/>
+    <menuitem id="menu_mcp_audit" name="Audit Log"
+              parent="menu_mcp_monitor" action="action_mcp_audit_log" sequence="1"/>
+    <menuitem id="menu_mcp_sessions" name="Sessions"
+              parent="menu_mcp_monitor" action="action_mcp_session" sequence="2"/>
+    <menuitem id="menu_mcp_confirmations" name="Confirmation Tokens"
+              parent="menu_mcp_monitor" action="action_mcp_confirmation" sequence="3"/>
+</odoo>

@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_mcp_confirmation" model="ir.actions.act_window">
+        <field name="name">Confirmation Tokens</field>
+        <field name="res_model">mcp.action.confirmation</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="view_mcp_confirmation_tree" model="ir.ui.view">
+        <field name="name">mcp.action.confirmation.tree</field>
+        <field name="model">mcp.action.confirmation</field>
+        <field name="arch" type="xml">
+            <tree decoration-muted="consumed" create="false">
+                <field name="create_date"/>
+                <field name="user_id"/>
+                <field name="tool_name"/>
+                <field name="expires_at"/>
+                <field name="consumed"/>
+                <field name="consumed_at"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_mcp_confirmation_form" model="ir.ui.view">
+        <field name="name">mcp.action.confirmation.form</field>
+        <field name="model">mcp.action.confirmation</field>
+        <field name="arch" type="xml">
+            <form create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="user_id"/>
+                            <field name="tool_name"/>
+                            <field name="expires_at"/>
+                        </group>
+                        <group>
+                            <field name="consumed"/>
+                            <field name="consumed_at"/>
+                        </group>
+                    </group>
+                    <group string="Preview">
+                        <field name="preview" nolabel="1"/>
+                    </group>
+                    <group string="Arguments">
+                        <field name="arguments_json" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="action_mcp_oauth_client" model="ir.actions.act_window">
+        <field name="name">OAuth Clients</field>
+        <field name="res_model">mcp.oauth.client</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <record id="view_mcp_oauth_client_tree" model="ir.ui.view">
+        <field name="name">mcp.oauth.client.tree</field>
+        <field name="model">mcp.oauth.client</field>
+        <field name="arch" type="xml">
+            <tree>
+                <field name="name"/>
+                <field name="client_id"/>
+                <field name="token_endpoint_auth_method"/>
+                <field name="is_confidential"/>
+                <field name="token_count"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_mcp_oauth_client_form" model="ir.ui.view">
+        <field name="name">mcp.oauth.client.form</field>
+        <field name="model">mcp.oauth.client</field>
+        <field name="arch" type="xml">
+            <form>
+                <sheet>
+                    <div class="oe_title">
+                        <h1><field name="name" placeholder="Client name"/></h1>
+                    </div>
+                    <group>
+                        <group>
+                            <field name="client_id" readonly="1"/>
+                            <field name="is_confidential"/>
+                            <field name="token_endpoint_auth_method"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="scope"/>
+                            <field name="grant_types"/>
+                            <field name="response_types"/>
+                            <field name="software_id"/>
+                            <field name="software_version"/>
+                        </group>
+                    </group>
+                    <group string="Redirect URIs">
+                        <field name="redirect_uris" nolabel="1"
+                               placeholder="https://claude.ai/api/mcp/auth_callback"/>
+                    </group>
+                    <notebook>
+                        <page string="Tokens">
+                            <field name="token_ids" readonly="1">
+                                <tree>
+                                    <field name="user_id"/>
+                                    <field name="scope"/>
+                                    <field name="resource"/>
+                                    <field name="access_expires_at"/>
+                                    <field name="revoked"/>
+                                    <field name="last_used_at"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+</odoo>

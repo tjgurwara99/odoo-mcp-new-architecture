@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo noupdate="1">
+
+    <!-- Users may only see MCP records that belong to them (defence in depth;
+         admins see all via the group below). -->
+
+    <record id="rule_mcp_token_own" model="ir.rule">
+        <field name="name">MCP tokens: own only</field>
+        <field name="model_id" ref="model_mcp_oauth_token"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_mcp_user'))]"/>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="True"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="True"/>
+    </record>
+
+    <record id="rule_mcp_token_admin_all" model="ir.rule">
+        <field name="name">MCP tokens: admin all</field>
+        <field name="model_id" ref="model_mcp_oauth_token"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_mcp_admin'))]"/>
+    </record>
+
+    <record id="rule_mcp_session_own" model="ir.rule">
+        <field name="name">MCP sessions: own only</field>
+        <field name="model_id" ref="model_mcp_session"/>
+        <field name="domain_force">[('user_id', '=', user.id)]</field>
+        <field name="groups" eval="[(4, ref('group_mcp_user'))]"/>
+    </record>
+
+    <record id="rule_mcp_session_admin_all" model="ir.rule">
+        <field name="name">MCP sessions: admin all</field>
+        <field name="model_id" ref="model_mcp_session"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_mcp_admin'))]"/>
+    </record>
+
+    <record id="rule_mcp_audit_admin_all" model="ir.rule">
+        <field name="name">MCP audit: admin all</field>
+        <field name="model_id" ref="model_mcp_audit_log"/>
+        <field name="domain_force">[(1, '=', 1)]</field>
+        <field name="groups" eval="[(4, ref('group_mcp_admin'))]"/>
+    </record>
+
+</odoo>
