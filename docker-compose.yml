@@ -1,0 +1,74 @@
+# Docker Compose for local Odoo 16 testing of the MCP connector gateway.
+#
+#   Services:
+#     db   - PostgreSQL 15, the database backing Odoo.
+#     odoo - Odoo 16 run from the source clone at /Users/taj/personal/odoo,
+#            with this repository mounted as an extra-addons path so the
+#            `mcp_connector_gateway` module is installable/testable.
+#
+#   The build context is the repository *parent* directory so the image build
+#   can read the odoo clone's requirements.txt. The odoo source and this repo
+#   are then bind-mounted at runtime for fast edit/restart cycles.
+#
+#   Usage (from /Users/taj/personal/odoo_mcp):
+#     docker compose up -d --build
+#     # First run: initialise the DB and install the module
+#     docker compose run --rm odoo \
+#       odoo-bin -c /etc/odoo/odoo.conf -d odoo -i mcp_connector_gateway --stop-after-init
+#     docker compose up -d
+#     # Run the gateway test suite:
+#     docker compose run --rm odoo \
+#       odoo-bin -c /etc/odoo/odoo.conf -d odoo -u mcp_connector_gateway \
+#       --test-enable --test-tags mcp_connector_gateway --stop-after-init
+#
+#   Odoo will be available at http://localhost:8069
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_DB: postgres
+      POSTGRES_USER: odoo
+      POSTGRES_PASSWORD: odoo
+    volumes:
+      - odoo-db-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD", "pg_isready", "-U", "odoo"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  odoo:
+    # Official multi-arch Odoo 16 image: ships Python 3.10 + all Odoo 16
+    # dependencies (gevent, wkhtmltopdf, ...) prebuilt, so nothing is compiled
+    # from source. We run OUR bind-mounted clone's odoo-bin against it, so the
+    # actual code executed is the source tree at /Users/taj/personal/odoo.
+    image: odoo:16.0
+    # Bypass the image's launcher so we can run the mounted source directly.
+    entrypoint: []
+    depends_on:
+      db:
+        condition: service_healthy
+    ports:
+      - "8069:8069"
+      - "8072:8072"   # longpolling / websocket (gevent) port
+    volumes:
+      # The Odoo 16 source clone (read-only; run directly from source).
+      - /Users/taj/personal/odoo:/odoo:ro
+      # This repository, exposed as an extra-addons path (module lives at
+      # ./mcp_connector_gateway, directly under the mount = a valid addons dir).
+      - ./addons:/mnt/extra-addons:ro
+      # Odoo config + persistent filestore.
+      - ./docker/odoo.conf:/etc/odoo/odoo.conf:ro
+      - odoo-filestore:/var/lib/odoo
+    command:
+      - python3
+      - /odoo/odoo-bin
+      - -c
+      - /etc/odoo/odoo.conf
+    restart: unless-stopped
+
+volumes:
+  odoo-db-data:
+  odoo-filestore:
