@@ -11,7 +11,7 @@
 | Topic | Decision |
 |---|---|
 | Odoo version | 16 |
-| MCP protocol implementation | Hand-rolled inside Odoo (no official Python MCP SDK dependency — avoids the Python 3.10+ requirement; Odoo 16 commonly runs on 3.8/3.9). We implement JSON-RPC 2.0 + the MCP **Streamable HTTP** transport ourselves as Odoo HTTP controllers. |
+| MCP protocol implementation | Hand-rolled inside Odoo (no official Python MCP SDK dependency). **Primary rationale:** the MCP Python SDK is asyncio-based, whereas Odoo controllers run in a synchronous, threaded/prefork WSGI model — integrating an async SDK into Odoo's worker model is awkward and error-prone. (Note: the older "Odoo 16 runs on 3.8/3.9" rationale is unreliable — Odoo 16's official requirement is Python 3.10+, so the SDK would often be version-compatible anyway. Verify the target instance's actual Python version early, but the async/threaded mismatch is the deciding factor regardless.) We implement JSON-RPC 2.0 + the MCP **Streamable HTTP** transport ourselves as Odoo HTTP controllers. |
 | Transport | HTTP (Streamable HTTP transport per current MCP spec), not stdio — this is a remote Claude "Connector", not a Desktop-config subprocess |
 | Auth between Claude and Odoo | Minimal OAuth 2.1 Authorization Server built into the module (Authorization Code + PKCE), so Claude's remote-connector OAuth flow works out of the box. Maps OAuth tokens 1:1 to real Odoo `res.users` accounts. |
 | Tool design | Curated, hand-written domain tools (predictable schemas, safe scoped actions) **plus** a generic, admin-configurable engine that can expose arbitrary allow-listed models/fields/actions for a given user — both gated by the same permission layer |
@@ -21,6 +21,7 @@
 | Multi-company | Single database, multi-company aware — tools accept/derive `company_id` context and respect the calling user's allowed companies |
 | Audit | Full audit trail stored as Odoo records (who, tool, arguments, result/error, timestamp, linked OAuth client), with an admin UI (list/search/filter) and configurable alerting on sensitive tool categories |
 | MCP capabilities | Tools + Resources (v1). Prompts deferred to a later phase. |
+| Target MCP protocol version | Pin an explicit `protocolVersion` (target **2025-06-18**) and negotiate it in `initialize`. This is not cosmetic — behaviors differ across versions: JSON-RPC **batching was removed** in 2025-06-18 (was mandatory in 2025-03-26), OAuth **Resource Indicators (RFC 8707) are required**, and **elicitation** was added. Implement to one pinned version and reject/negotiate others explicitly. |
 | Packaging | Core module `mcp_server` (protocol engine, OAuth provider, audit, generic model engine, admin config UI) + separate thin domain add-ons: `mcp_server_sales`, `mcp_server_accounting`, `mcp_server_inventory`, `mcp_server_contacts`, each auto-registering its tools/resources into the core registry |
 | Deployment | On-premise, self-managed nginx/Apache reverse proxy doing TLS termination in front of Odoo |
 | Dev/test | Existing Odoo 16 dev instance available (connection details to be provided later) |
@@ -41,8 +42,9 @@ Claude  ───────────► │  │  mcp_server (core module) 
 (remote MCP          │  │                            │ │
  connector)          │  │  - OAuth 2.1 AS endpoints  │ │
                      │  │  - MCP HTTP endpoint       │ │
-                     │  │    (JSON-RPC 2.0, batching,│ │
-                     │  │     SSE for streaming)     │ │
+                     │  │    (JSON-RPC 2.0, single-  │ │
+                     │  │     JSON responses; SSE    │ │
+                     │  │     only when streaming)   │ │
                      │  │  - Tool/Resource registry  │ │
                      │  │  - Confirmation-token svc  │ │
                      │  │  - Audit log models + UI   │ │
@@ -71,18 +73,27 @@ Each domain add-on is a normal Odoo module that, on load, calls a registration A
 **Responsibilities:**
 1. **MCP protocol/transport layer**
    - HTTP controller(s) implementing the MCP **Streamable HTTP** transport: a single `POST /mcp` endpoint accepting JSON-RPC 2.0 requests/batches, optionally upgrading to SSE for streamed responses/server-initiated messages, plus session management (`Mcp-Session-Id` header) per spec.
-   - Implements the required MCP lifecycle: `initialize`, `initialized` notification, capability negotiation, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `ping`, graceful `shutdown`.
-   - Structured JSON-RPC error handling (invalid params, method not found, internal error) mapped to MCP error semantics.
+   - Implements the required MCP lifecycle: `initialize`, `initialized` notification, capability negotiation, `tools/list`, `tools/call`, `resources/list`, `resources/read`, `resources/templates/list`, `ping`. **Note: there is no `shutdown` JSON-RPC method in MCP** — session termination is a transport concern, handled via `HTTP DELETE /mcp` carrying the `Mcp-Session-Id` header. Implement DELETE-based session teardown, not a `shutdown` method.
+   - **Two distinct error channels (must not be conflated):**
+     - *Protocol errors* (unknown method, invalid params, malformed JSON-RPC, auth failure) → JSON-RPC `error` object with standard codes.
+     - *Tool execution errors* (business logic failed, permission denied inside a tool, validation failure) → a **successful** JSON-RPC result with `isError: true` and the error described in `content`. These are NOT JSON-RPC errors. Getting this wrong prevents Claude from reasoning about failed tool calls; both paths get explicit tests in Phase 1.
+   - **Transport preference:** respond to `POST /mcp` with a single plain JSON body for ordinary request/response tool calls (the spec allows this). Reserve SSE for genuine streaming / server-initiated messages only — see the worker-model caveat in §3.1 note below.
+   - **Batching:** for target version 2025-06-18, do NOT implement JSON-RPC batch handling (it was removed from the spec). If a client sends a batch, reject per spec.
 
 2. **OAuth 2.1 Authorization Server**
    - Endpoints: `/mcp/oauth/authorize`, `/mcp/oauth/token`, `/mcp/oauth/register` (Dynamic Client Registration — Claude's remote connector flow uses this), `.well-known/oauth-authorization-server` metadata document, `.well-known/oauth-protected-resource`.
    - PKCE (S256) mandatory, short-lived authorization codes, refresh tokens with rotation, access-token TTL configurable.
+   - **Resource Indicators (RFC 8707), required by MCP 2025-06-18:** clients send a `resource` parameter binding tokens to this MCP server. The server MUST validate the token's intended audience/resource on every request and reject tokens not scoped to it — this prevents confused-deputy / token-passthrough attacks. Treat this as a Phase 2 requirement with explicit tests, not an optional extra.
+   - This module acts as **both** the OAuth Authorization Server and the Resource Server (combined, single-module). That is permitted; document the assumption so a future split (external AS) stays possible.
    - New models: `mcp.oauth.client` (registered client apps), `mcp.oauth.token` (access/refresh tokens, hashed at rest), `mcp.oauth.auth.code` (one-time codes).
    - The `/authorize` step reuses Odoo's own login screen (leveraging existing `res.users` session auth) + a consent screen showing what the client will be able to do, then issues a code tied to that logged-in `res.users` record.
-   - Token introspection used by the MCP controller on every request to resolve `access_token → res.users`, then all ORM calls run with that user's uid (`request.env(user=uid)`), never `sudo()`.
+   - Token introspection used by the MCP controller on every request to resolve `access_token → res.users`, then all ORM calls in **tool execution paths** run with that user's uid (`request.env(user=uid)`), never `sudo()`.
+   - **`sudo` boundary clarification:** the "no `sudo()`" rule applies to *tool business logic only*. Framework bookkeeping — writing `mcp.audit.log`, creating/consuming confirmation and OAuth tokens — must succeed regardless of the calling user's create rights on those internal models, so it legitimately uses controlled elevated writes (`sudo()`/dedicated system context). The rule is: tool logic never widens the user's data access; plumbing may write internal records the user can't. This distinction is enforced by keeping bookkeeping out of tool callables.
 
 3. **Tool & Resource Registry**
-   - A Python-level registration API (e.g. `mcp_server.registry.register_tool(...)`, `register_resource_provider(...)`) that domain modules call from their own `post_load`/registration code.
+   - A Python-level registration API (e.g. `mcp_server.registry.register_tool(...)`, `register_resource_provider(...)`) that domain modules call.
+   - **Registration timing:** prefer **import-time registration via decorators** (module import order is deterministic through manifest `depends`) or `_register_hook`, rather than the manifest `post_load` — `post_load` runs at bootstrap before the registry/env is fully ready and is easy to get wrong. Pin one pattern in Phase 1 so every domain module follows it identically.
+   - The in-memory registry is per-worker (each prefork worker builds it at load) — this is fine because it is derived deterministically from installed modules. Do **not** store request/session state here (see the session-store note below).
    - Registry entries carry: name, JSON-schema for input, human description, category (for audit/alerting), whether it's a "safe read" or "write requiring confirmation", the Python callable, and the minimal Odoo group/permission expected (defense-in-depth on top of ACL).
    - `tools/list` and `resources/list` are computed **per authenticated user** — i.e., a tool only appears if the user's Odoo permissions plausibly allow it (e.g., hide `sales.create_quotation` from a user with no Sales access), in addition to real ACL enforcement at call time.
 
@@ -96,6 +107,7 @@ Each domain add-on is a normal Odoo module that, on load, calls a registration A
      - Step 1 (`propose`): tool validates input, computes a preview/diff (e.g., "Will create Sale Order for Partner X, 3 lines, total $Y"), stores the pending action + serialized args with a random token and short TTL (e.g. 5 minutes), returns the preview + token to Claude.
      - Step 2 (`confirm`): a second tool call (`odoo.confirm_action` or domain-specific `confirm_*`) with the token executes the actual ORM write inside a transaction, marks the token consumed, and logs the result.
    - Tokens are single-use, user-bound, and expire automatically (cron cleanup).
+   - **Design tradeoffs / MCP-native layering:** the propose→confirm token pattern is robust *server-side* enforcement, but it doubles round-trips and LLMs sometimes mishandle two-step flows. Layer MCP-native signals on top: set tool annotations (`readOnlyHint`, `destructiveHint`, `idempotentHint`) so clients like Claude surface intent and prompt for approval; optionally evaluate **elicitation** (2025-06-18) as an alternative confirm channel where client support exists. Keep the token workflow as the authoritative enforcement mechanism regardless of client behavior.
 
 6. **Audit Log**
    - Model `mcp.audit.log`: timestamp, user, oauth client, tool name, input args (sanitized/truncated), result summary/error, duration, confirmation-token linkage, IP/user agent.
@@ -104,12 +116,17 @@ Each domain add-on is a normal Odoo module that, on load, calls a registration A
 
 7. **Resources**
    - Core resource types: read-only record snapshot (`odoo://<model>/<id>`), report/PDF resources (`odoo://report/<report_name>/<res_id>`), leveraging Odoo's existing QWeb/report rendering.
+   - These are **templated** URIs — expose them via `resources/templates/list` (parameterized templates), not by trying to enumerate every record in a static `resources/list`. Static `resources/list` is reserved for a small, enumerable set (if any).
    - Domain modules can register additional resource providers (e.g. accounting invoice PDF, stock delivery slip).
 
 8. **Admin configuration UI**
    - Settings page: enable/disable MCP server, manage OAuth clients, manage `mcp.model.access` allowlist, view audit log, configure token TTLs, configure sensitive-action alert recipients.
 
 **Security posture:** everything funnels through Odoo's normal `env.user`/ACL/`ir.rule` machinery; the module adds *narrowing* layers (registry visibility, `mcp.model.access` allowlist, confirmation tokens, audit), never *widening* ones.
+
+**Worker-model & state caveats (critical for correctness under Odoo prefork):**
+- **SSE ties up a worker.** A long-lived SSE connection occupies an Odoo HTTP worker for its whole lifetime; with a small fixed worker count, a handful of open MCP sessions can starve the server. Mitigations: (a) default to single-JSON-body responses for `POST /mcp` tool calls and only open SSE when streaming/server-initiated messages are actually required; (b) if SSE is kept, size workers accordingly and evaluate the gevent/longpolling worker; (c) cover this in Phase 7 load testing.
+- **Session & token state must be cross-worker.** The next request for a given `Mcp-Session-Id` may land on a different worker/process, so MCP session state, confirmation tokens, and OAuth tokens must live in the DB (or Redis), never in worker memory. (Confirmation/OAuth tokens are already modeled as DB records — extend the same rule to MCP session state.)
 
 ### 3.2 Domain Add-ons
 
@@ -184,14 +201,15 @@ odoo-mcp-new-architecture/
 - CI (if desired later): GitHub Actions running module tests against a Postgres service container.
 
 **Phase 1 — Core protocol engine (no auth yet, dev-only)**
-- Implement JSON-RPC 2.0 handling + MCP lifecycle (`initialize`, `tools/list`, `tools/call`, `ping`) behind a controller reachable only by an already-authenticated Odoo session (temporary, for local testing with e.g. `mcp-inspector`).
-- Tool/resource registry API.
-- Unit tests for protocol correctness (malformed requests, unknown methods, capability negotiation).
+- Implement JSON-RPC 2.0 handling + MCP lifecycle (`initialize` with pinned `protocolVersion`, `initialized`, `tools/list`, `tools/call`, `ping`, `HTTP DELETE /mcp` session teardown) behind a controller reachable only by an already-authenticated Odoo session (temporary, for local testing with e.g. `mcp-inspector`).
+- Tool/resource registry API (import-time decorator registration pattern, fixed here for all modules).
+- DB/Redis-backed MCP session store (not worker memory); single-JSON-body responses by default, SSE path stubbed.
+- Unit tests for protocol correctness: malformed requests, unknown methods, capability negotiation, and crucially the **two error channels** — protocol errors as JSON-RPC `error` vs. tool-execution errors as results with `isError: true`.
 
 **Phase 2 — OAuth 2.1 Authorization Server**
 - Dynamic client registration, `/authorize` (reusing Odoo login + consent screen), `/token` (auth code + refresh, PKCE mandatory), metadata `.well-known` documents.
 - Token ↔ `res.users` resolution wired into the MCP controller; remove the temporary dev-only auth from Phase 1.
-- Security tests: PKCE required, expired/replayed codes rejected, token scoping, token revocation.
+- Security tests: PKCE required, expired/replayed codes rejected, token scoping, token revocation, and **Resource Indicator / audience validation** (RFC 8707) — tokens not scoped to this MCP server are rejected.
 
 **Phase 3 — Generic model engine + admin allowlist UI**
 - `mcp.model.access` model + Settings UI.
@@ -231,6 +249,7 @@ These are smaller, can be decided as we start coding rather than blocking the pl
 - Whether Redis is available in the deployment (affects rate-limiting/session-store choice) or we stay Postgres-only.
 - Preferred reverse proxy (nginx vs Apache) so we can write the exact sample config in `docs/oauth-setup.md`.
 - The actual custom license text for `LICENSE`.
+- Odoo 16 is approaching end-of-support; keep a forward-port path to 17/18 in mind (avoid 16-only APIs where a cheap portable alternative exists). Not a blocker for v1.
 
 ---
 
