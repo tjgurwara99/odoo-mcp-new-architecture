@@ -7,49 +7,123 @@
         <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
         <field name="arch" type="xml">
             <xpath expr="//div[hasclass('settings')]" position="inside">
-                <app data-string="MCP Server" string="MCP Server" name="mcp_server"
-                     logo="/mcp_server/static/description/icon.png">
-                    <block title="Protocol &amp; Transport" name="mcp_protocol">
-                        <setting string="Enable MCP Server" help="Master switch for the /mcp endpoint.">
-                            <field name="mcp_enabled"/>
-                        </setting>
-                        <setting string="Public Base URL"
-                                 help="External HTTPS URL used for OAuth metadata and RFC 8707 audience validation.">
-                            <field name="mcp_server_url" placeholder="https://erp.example.com"/>
-                        </setting>
-                        <setting string="Require Resource Indicator (RFC 8707)"
-                                 help="Reject access tokens not bound to this MCP resource.">
-                            <field name="mcp_require_resource_indicator"/>
-                        </setting>
-                    </block>
-                    <block title="OAuth" name="mcp_oauth">
-                        <setting string="Open Dynamic Client Registration"
-                                 help="Allow clients (e.g. Claude) to self-register.">
-                            <field name="mcp_dcr_open"/>
-                        </setting>
-                        <setting string="Access Token TTL (s)">
-                            <field name="mcp_access_token_ttl"/>
-                        </setting>
-                        <setting string="Refresh Token TTL (s)">
-                            <field name="mcp_refresh_token_ttl"/>
-                        </setting>
-                    </block>
-                    <block title="Safety &amp; Audit" name="mcp_safety">
-                        <setting string="Confirmation Token TTL (s)"
-                                 help="Lifetime of propose/confirm tokens for write tools.">
-                            <field name="mcp_confirmation_ttl"/>
-                        </setting>
-                        <setting string="Alert on Sensitive Actions">
-                            <field name="mcp_enable_alerts"/>
-                        </setting>
-                        <setting string="Sensitive Categories">
-                            <field name="mcp_sensitive_categories"/>
-                        </setting>
-                        <setting string="Sensitive Tool Prefixes">
-                            <field name="mcp_sensitive_tool_prefixes"/>
-                        </setting>
-                    </block>
-                </app>
+                <div class="app_settings_block o_not_app"
+                     string="MCP Server"
+                     data-string="MCP Server"
+                     data-key="mcp_server"
+                     groups="mcp_server.group_mcp_admin">
+
+                    <h2>Protocol &amp; Transport</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="mcp_enabled"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_enabled"/>
+                                <div class="text-muted">
+                                    Master switch for the /mcp endpoint.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="mcp_require_resource_indicator"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_require_resource_indicator"/>
+                                <div class="text-muted">
+                                    Reject access tokens not bound to this MCP resource (RFC 8707).
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_server_url" string="Public Base URL"/>
+                                <div class="text-muted">
+                                    External HTTPS URL of this Odoo as seen by clients. Used for
+                                    OAuth metadata and RFC 8707 audience validation.
+                                </div>
+                                <div class="content-group mt16">
+                                    <field name="mcp_server_url" placeholder="https://erp.example.com"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>OAuth</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="mcp_dcr_open"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_dcr_open" string="Open Dynamic Client Registration"/>
+                                <div class="text-muted">
+                                    Allow clients (e.g. Claude) to self-register via /mcp/oauth/register.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_access_token_ttl" string="Access Token TTL (s)"/>
+                                <div class="content-group mt16">
+                                    <field name="mcp_access_token_ttl"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_refresh_token_ttl" string="Refresh Token TTL (s)"/>
+                                <div class="content-group mt16">
+                                    <field name="mcp_refresh_token_ttl"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <h2>Safety &amp; Audit</h2>
+                    <div class="row mt16 o_settings_container">
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_left_pane">
+                                <field name="mcp_enable_alerts"/>
+                            </div>
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_enable_alerts" string="Alert on Sensitive Actions"/>
+                                <div class="text-muted">
+                                    Schedule an activity for MCP admins on sensitive tool calls.
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_confirmation_ttl" string="Confirmation Token TTL (s)"/>
+                                <div class="text-muted">
+                                    Lifetime of propose/confirm tokens for write tools.
+                                </div>
+                                <div class="content-group mt16">
+                                    <field name="mcp_confirmation_ttl"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_sensitive_categories" string="Sensitive Categories"/>
+                                <div class="content-group mt16">
+                                    <field name="mcp_sensitive_categories"/>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="col-12 col-lg-6 o_setting_box">
+                            <div class="o_setting_right_pane">
+                                <label for="mcp_sensitive_tool_prefixes" string="Sensitive Tool Prefixes"/>
+                                <div class="content-group mt16">
+                                    <field name="mcp_sensitive_tool_prefixes"/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
             </xpath>
         </field>
     </record>

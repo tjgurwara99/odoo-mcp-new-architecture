@@ -20,7 +20,9 @@ class McpModelAccess(models.Model):
     _order = "model_id"
 
     model_id = fields.Many2one("ir.model", required=True, ondelete="cascade")
-    model_name = fields.Char(related="model_id.model", store=True, index=True)
+    model_name = fields.Char(
+        related="model_id.model", store=True, index=True, string="Technical Model Name"
+    )
     active = fields.Boolean(default=True)
 
     allow_read = fields.Boolean(default=True)
