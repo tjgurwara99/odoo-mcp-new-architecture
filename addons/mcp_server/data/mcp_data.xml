@@ -30,6 +30,10 @@
             <field name="key">mcp_server.confirmation_ttl</field>
             <field name="value">300</field>
         </record>
+        <record id="param_mcp_report_link_ttl" model="ir.config_parameter">
+            <field name="key">mcp_server.report_link_ttl</field>
+            <field name="value">3600</field>
+        </record>
         <record id="param_mcp_enable_alerts" model="ir.config_parameter">
             <field name="key">mcp_server.enable_alerts</field>
             <field name="value">False</field>

@@ -195,7 +195,15 @@ class Registry:
     def _user_has_groups(env, group_xmlids):
         if not group_xmlids:
             return True
-        return all(env.user.has_group(x) for x in group_xmlids)
+        for xmlid in group_xmlids:
+            try:
+                if not env.user.has_group(xmlid):
+                    return False
+            except (ValueError, KeyError):
+                # Group xmlid does not resolve (e.g. its module isn't
+                # installed) -> treat the tool as not visible, never crash.
+                return False
+        return True
 
     def visible_tools(self, env):
         """Tools the given user may plausibly use (group pre-filter)."""

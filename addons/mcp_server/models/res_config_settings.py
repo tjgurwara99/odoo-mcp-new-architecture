@@ -38,6 +38,11 @@ class ResConfigSettings(models.TransientModel):
         config_parameter="mcp_server.confirmation_ttl",
         default=300,
     )
+    mcp_report_link_ttl = fields.Integer(
+        string="Report Link TTL (s)",
+        config_parameter="mcp_server.report_link_ttl",
+        default=3600,
+    )
     mcp_enable_alerts = fields.Boolean(
         string="Alert on Sensitive Actions",
         config_parameter="mcp_server.enable_alerts",

@@ -5,5 +5,6 @@ access_mcp_oauth_auth_code_admin,mcp.oauth.auth.code admin,model_mcp_oauth_auth_
 access_mcp_session_admin,mcp.session admin,model_mcp_session,group_mcp_admin,1,1,0,1
 access_mcp_model_access_admin,mcp.model.access admin,model_mcp_model_access,group_mcp_admin,1,1,1,1
 access_mcp_action_confirmation_admin,mcp.action.confirmation admin,model_mcp_action_confirmation,group_mcp_admin,1,0,0,1
+access_mcp_report_link_admin,mcp.report.link admin,model_mcp_report_link,group_mcp_admin,1,0,0,1
 access_mcp_audit_log_admin,mcp.audit.log admin,model_mcp_audit_log,group_mcp_admin,1,0,0,0
 access_mcp_audit_log_user,mcp.audit.log user readonly,model_mcp_audit_log,base.group_user,0,0,0,0

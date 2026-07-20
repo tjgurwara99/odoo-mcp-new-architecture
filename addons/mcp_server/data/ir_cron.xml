@@ -44,5 +44,16 @@
             <field name="numbercall">-1</field>
             <field name="active" eval="True"/>
         </record>
+
+        <record id="cron_gc_report_links" model="ir.cron">
+            <field name="name">MCP: purge expired report links</field>
+            <field name="model_id" ref="model_mcp_report_link"/>
+            <field name="state">code</field>
+            <field name="code">model._gc()</field>
+            <field name="interval_number">1</field>
+            <field name="interval_type">hours</field>
+            <field name="numbercall">-1</field>
+            <field name="active" eval="True"/>
+        </record>
     </data>
 </odoo>
