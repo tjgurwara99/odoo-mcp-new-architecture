@@ -42,5 +42,5 @@ Run tests:
 odoo -d <db> -i mcp_server --test-enable --stop-after-init
 ```
 
-Domain add-ons (`mcp_server_sales`, `_accounting`, `_inventory`, `_contacts`)
-are the next phase (PLAN.md Phase 5).
+Domain add-ons (`mcp_server_sales`, `_inventory`, `_contacts`) follow the same
+template; `mcp_server_accounting` is implemented (PLAN.md Phase 5).
