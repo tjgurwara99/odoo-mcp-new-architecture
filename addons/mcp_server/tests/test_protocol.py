@@ -18,6 +18,13 @@ def _crash(env, arguments):
     raise ValueError("unexpected explosion")
 
 
+def _needs_confirm(env, arguments):
+    if not arguments.get("confirmation_token"):
+        raise exceptions.ConfirmationRequired(
+            "Will DO the thing", "tok-abc-123", 300)
+    return {"done": True}
+
+
 class TestProtocol(TransactionCase):
     @classmethod
     def setUpClass(cls):
@@ -31,6 +38,9 @@ class TestProtocol(TransactionCase):
         registry.add_tool(ToolDefinition(
             "test.crash", "crash", {"type": "object", "properties": {}}, _crash,
             category=constants.CATEGORY_READ))
+        registry.add_tool(ToolDefinition(
+            "test.confirm", "confirm", {"type": "object", "properties": {}},
+            _needs_confirm, category=constants.CATEGORY_WRITE, is_write=True))
 
     def _protocol(self):
         ctx = ExecutionContext(env=self.env)
@@ -88,6 +98,18 @@ class TestProtocol(TransactionCase):
         result = self._protocol().dispatch(
             "tools/call", {"name": "test.crash", "arguments": {}})
         self.assertTrue(result["isError"])
+
+    def test_confirmation_token_is_in_visible_text(self):
+        # The token must appear in the human-readable content block, not only in
+        # structuredContent, so clients that read `content` can act on it.
+        result = self._protocol().dispatch(
+            "tools/call", {"name": "test.confirm", "arguments": {}})
+        self.assertFalse(result["isError"])
+        text = result["content"][0]["text"]
+        self.assertIn("tok-abc-123", text)
+        self.assertIn("confirmation_token", text)
+        self.assertEqual(
+            result["structuredContent"]["confirmation_token"], "tok-abc-123")
 
     def test_unknown_tool_is_protocol_error(self):
         with self.assertRaises(exceptions.MethodNotFound):

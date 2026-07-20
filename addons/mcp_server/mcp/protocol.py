@@ -186,17 +186,30 @@ class MCPProtocol:
                 duration_ms=int((time.time() - start) * 1000),
             )
         except exceptions.ConfirmationRequired as cr:
+            instructions = (
+                "Re-call this tool with the same arguments plus "
+                "'confirmation_token' to execute the change."
+            )
+            # The token MUST appear in the human-readable text block: many MCP
+            # clients (incl. Claude) reason over `content` text and ignore
+            # `structuredContent`, so a token hidden only in structured data is
+            # invisible to the model.
+            visible_text = (
+                "%s\n\n"
+                "\u26a0\ufe0f Confirmation required before this change is applied.\n"
+                "To proceed, call this same tool again with the identical "
+                "arguments PLUS a \"confirmation_token\" field set to:\n\n"
+                "    %s\n\n"
+                "This token is single-use and expires in %d seconds."
+            ) % (cr.preview, cr.token, cr.expires_in)
             result = {
-                "content": [{"type": "text", "text": cr.preview}],
+                "content": [{"type": "text", "text": visible_text}],
                 "structuredContent": {
                     "status": "confirmation_required",
                     "preview": cr.preview,
                     "confirmation_token": cr.token,
                     "expires_in": cr.expires_in,
-                    "instructions": (
-                        "Re-call this tool with the same arguments plus "
-                        "'confirmation_token' to execute the change."
-                    ),
+                    "instructions": instructions,
                 },
                 "isError": False,
             }
