@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo.tests.common import TransactionCase
+from odoo.tests.common import TransactionCase, tagged
 
 from odoo.addons.mcp_server.mcp import exceptions
 from odoo.addons.mcp_server_sales.tools import (
@@ -16,6 +16,10 @@ from odoo.addons.mcp_server_sales.tools import (
 )
 
 
+# Run after the full registry is loaded: sale.order.warehouse_id is added by the
+# auto-installed ``sale_stock`` bridge, which loads after this module. Running
+# post_install guarantees those extensions are present.
+@tagged("post_install", "-at_install")
 class TestSalesTools(TransactionCase):
     def setUp(self):
         super().setUp()

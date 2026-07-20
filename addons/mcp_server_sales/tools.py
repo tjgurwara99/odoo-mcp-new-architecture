@@ -126,6 +126,24 @@ def _apply_explicit_prices(order, lines_in):
             line_rec.price_unit = float(li["price_unit"])
 
 
+def _default_warehouse_id(env):
+    """Resolve the calling user's default warehouse (only when sale_stock is on).
+
+    ``sale.order.warehouse_id`` is added (and made NOT-NULL) by ``sale_stock``;
+    its precomputed default is not always populated depending on how the record
+    is created, so we set it explicitly, honouring the user's own default.
+    """
+    user = env.user
+    wh = False
+    if hasattr(user, "_get_default_warehouse_id"):
+        wh = user._get_default_warehouse_id()
+    if not wh:
+        wh = env["stock.warehouse"].search(
+            [("company_id", "=", env.company.id)], limit=1
+        )
+    return wh.id if wh else False
+
+
 _ORDER_LINE_SCHEMA = {
     "type": "array",
     "items": {
@@ -319,6 +337,10 @@ def create_quotation(env, arguments):
     commands = [_line_command(li) for li in lines_in]
 
     order_vals = {"partner_id": partner.id, "order_line": commands}
+    if "warehouse_id" in env["sale.order"]._fields:
+        wh_id = _default_warehouse_id(env)
+        if wh_id:
+            order_vals["warehouse_id"] = wh_id
     if arguments.get("client_order_ref"):
         order_vals["client_order_ref"] = arguments["client_order_ref"]
     if arguments.get("validity_date"):
