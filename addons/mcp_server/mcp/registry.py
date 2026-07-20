@@ -20,15 +20,28 @@ A tool callable has signature ``callable(env, arguments) -> result`` where:
   or a fully-formed MCP tool result dict containing a ``content`` key.
 """
 import logging
+import re
 
 from . import constants
 
 _logger = logging.getLogger(__name__)
 
+# Claude (and the MCP tool schema) require tool names to match
+# ^[a-zA-Z0-9_-]{1,64}$ — dots are NOT allowed. We keep readable dotted names
+# internally (registry keys, audit log) and expose a sanitised "wire" name to
+# clients, mapping back on tools/call via an explicit reverse index.
+_WIRE_INVALID_RE = re.compile(r"[^a-zA-Z0-9_-]")
+
+
+def sanitize_tool_name(name):
+    wire = _WIRE_INVALID_RE.sub("_", name or "")
+    return wire[:64]
+
 
 class ToolDefinition:
     __slots__ = (
         "name",
+        "wire_name",
         "description",
         "input_schema",
         "callable",
@@ -52,6 +65,7 @@ class ToolDefinition:
         module=None,
     ):
         self.name = name
+        self.wire_name = sanitize_tool_name(name)
         self.description = description
         self.input_schema = input_schema or {"type": "object", "properties": {}}
         self.callable = func
@@ -62,9 +76,9 @@ class ToolDefinition:
         self.module = module
 
     def to_mcp(self):
-        """Serialise for ``tools/list``."""
+        """Serialise for ``tools/list`` (uses the wire-safe name)."""
         entry = {
-            "name": self.name,
+            "name": self.wire_name,
             "description": self.description,
             "inputSchema": self.input_schema,
         }
@@ -116,6 +130,7 @@ class Registry:
 
     def __init__(self):
         self._tools = {}
+        self._wire_index = {}
         self._resource_templates = {}
 
     # -- registration --------------------------------------------------------
@@ -126,15 +141,31 @@ class Registry:
                 definition.name,
                 definition.module,
             )
+        existing = self._wire_index.get(definition.wire_name)
+        if existing and existing != definition.name:
+            _logger.warning(
+                "MCP tool wire-name collision: %r and %r both map to %r",
+                existing,
+                definition.name,
+                definition.wire_name,
+            )
         self._tools[definition.name] = definition
-        _logger.debug("Registered MCP tool %r", definition.name)
+        self._wire_index[definition.wire_name] = definition.name
+        _logger.debug("Registered MCP tool %r (wire %r)", definition.name,
+                      definition.wire_name)
 
     def add_resource_template(self, definition):
         self._resource_templates[definition.uri_template] = definition
 
     # -- lookup --------------------------------------------------------------
     def get_tool(self, name):
-        return self._tools.get(name)
+        """Resolve a tool by canonical (dotted) or wire (sanitised) name."""
+        if name in self._tools:
+            return self._tools[name]
+        canonical = self._wire_index.get(name)
+        if canonical:
+            return self._tools.get(canonical)
+        return None
 
     def all_tools(self):
         return list(self._tools.values())

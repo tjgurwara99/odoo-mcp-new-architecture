@@ -58,8 +58,17 @@ class TestProtocol(TransactionCase):
     def test_tools_list_contains_registered(self):
         result = self._protocol().dispatch("tools/list", {})
         names = {t["name"] for t in result["tools"]}
-        self.assertIn("test.echo", names)
-        self.assertIn("odoo.search_records", names)
+        # Names are exposed in wire-safe form (dots -> underscores).
+        self.assertIn("test_echo", names)
+        self.assertIn("odoo_search_records", names)
+        self.assertNotIn("test.echo", names)
+
+    def test_tools_call_accepts_wire_name(self):
+        # Claude calls back with the sanitised name; it must resolve.
+        result = self._protocol().dispatch(
+            "tools/call", {"name": "test_echo", "arguments": {"a": 1}})
+        self.assertFalse(result["isError"])
+        self.assertEqual(result["structuredContent"]["echoed"], {"a": 1})
 
     def test_tools_call_success(self):
         result = self._protocol().dispatch(

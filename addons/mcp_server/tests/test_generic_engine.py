@@ -50,12 +50,25 @@ class TestGenericEngine(TransactionCase):
             create_record(self.env, {
                 "model": "res.partner", "values": {"name": "X", "email": "a@b.c"}})
 
+    def _propose(self, func, args):
+        """Run a write tool's propose step and return the confirmation token.
+
+        We deliberately avoid ``assertRaises`` here: Odoo wraps that in a
+        savepoint and rolls back on the expected exception, which would undo the
+        pending confirmation record created during propose (in production the
+        propose and confirm are two separate request transactions).
+        """
+        try:
+            func(self.env, args)
+            self.fail("expected ConfirmationRequired")
+        except exceptions.ConfirmationRequired as cr:
+            return cr.token
+
     # -- propose/confirm on writes -------------------------------------------
     def test_create_requires_confirmation_then_commits(self):
         self._allow(allow_create=True)
-        with self.assertRaises(exceptions.ConfirmationRequired) as cm:
-            create_record(self.env, {"model": "res.partner", "values": {"name": "ACME"}})
-        token = cm.exception.token
+        token = self._propose(
+            create_record, {"model": "res.partner", "values": {"name": "ACME"}})
         result = create_record(self.env, {
             "model": "res.partner", "values": {"name": "ACME"},
             "confirmation_token": token})
@@ -66,9 +79,8 @@ class TestGenericEngine(TransactionCase):
     def test_delete_requires_confirmation(self):
         self._allow(allow_unlink=True)
         partner = self.env["res.partner"].create({"name": "ToDelete"})
-        with self.assertRaises(exceptions.ConfirmationRequired) as cm:
-            delete_record(self.env, {"model": "res.partner", "id": partner.id})
-        token = cm.exception.token
+        token = self._propose(
+            delete_record, {"model": "res.partner", "id": partner.id})
         result = delete_record(self.env, {
             "model": "res.partner", "id": partner.id, "confirmation_token": token})
         self.assertTrue(result["deleted"])
@@ -78,8 +90,7 @@ class TestGenericEngine(TransactionCase):
         self._allow(allow_write=True)
         partner = self.env["res.partner"].create({"name": "Old"})
         args = {"model": "res.partner", "id": partner.id, "values": {"name": "New"}}
-        with self.assertRaises(exceptions.ConfirmationRequired) as cm:
-            update_record(self.env, args)
-        args["confirmation_token"] = cm.exception.token
+        token = self._propose(update_record, args)
+        args["confirmation_token"] = token
         update_record(self.env, args)
         self.assertEqual(partner.name, "New")
