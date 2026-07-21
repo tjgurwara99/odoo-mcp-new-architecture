@@ -35,16 +35,23 @@ class McpAuditLog(models.Model):
     user_agent = fields.Char()
 
     # -- redaction helpers ---------------------------------------------------
-    @staticmethod
-    def _sanitize(value):
+    @classmethod
+    def _redact(cls, value):
+        """Recursively redact sensitive keys anywhere in the structure."""
+        if isinstance(value, dict):
+            return {
+                k: ("***" if isinstance(k, str) and k.lower() in _SENSITIVE_KEYS
+                    else cls._redact(v))
+                for k, v in value.items()
+            }
+        if isinstance(value, (list, tuple)):
+            return [cls._redact(v) for v in value]
+        return value
+
+    @classmethod
+    def _sanitize(cls, value):
         try:
-            if isinstance(value, dict):
-                clean = {
-                    k: ("***" if k.lower() in _SENSITIVE_KEYS else v)
-                    for k, v in value.items()
-                }
-            else:
-                clean = value
+            clean = cls._redact(value)
             text = json.dumps(clean, default=str, ensure_ascii=False)
         except Exception:  # noqa: BLE001
             text = str(value)

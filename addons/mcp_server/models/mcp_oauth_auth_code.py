@@ -62,11 +62,15 @@ class McpOauthAuthCode(models.Model):
 
     @staticmethod
     def verify_pkce(code_verifier, code_challenge, method="S256"):
-        """Return True if ``code_verifier`` matches ``code_challenge``."""
+        """Return True if ``code_verifier`` matches ``code_challenge``.
+
+        Only S256 is supported. The insecure ``plain`` method is intentionally
+        rejected to prevent any downgrade path.
+        """
         if not code_verifier or not code_challenge:
             return False
-        if method == "plain":
-            return tok.constant_time_equals(code_verifier, code_challenge)
+        if method and method != "S256":
+            return False
         digest = hashlib.sha256(code_verifier.encode("ascii")).digest()
         computed = base64.urlsafe_b64encode(digest).rstrip(b"=").decode("ascii")
         return tok.constant_time_equals(computed, code_challenge)

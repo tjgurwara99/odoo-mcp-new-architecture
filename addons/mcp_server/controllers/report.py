@@ -54,7 +54,7 @@ class MCPReportController(http.Controller):
         except Exception as exc:  # noqa: BLE001
             _logger.exception("MCP report render failed for %s", link.report_ref)
             return request.make_response(
-                "Failed to render report: %s" % exc,
+                "Failed to render report.",
                 headers=[("Content-Type", "text/plain")],
                 status=500,
             )

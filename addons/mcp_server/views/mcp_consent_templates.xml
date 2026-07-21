@@ -12,6 +12,11 @@
                             <strong t-esc="client.name"/> is requesting access to Odoo
                             on behalf of <strong t-esc="user.name"/>.
                         </p>
+                        <div class="alert alert-warning" role="alert">
+                            After you allow, Odoo will send an authorization code to:
+                            <br/><code t-esc="params.get('redirect_uri')"/>
+                            <br/>Only continue if you recognise and trust this destination.
+                        </div>
                         <ul>
                             <li>Requested scope: <code t-esc="scope"/></li>
                             <li>Actions run strictly with your Odoo permissions.</li>

@@ -238,10 +238,12 @@ class MCPProtocol:
         except Exception as exc:  # noqa: BLE001 - convert to tool error
             _logger.exception("Unhandled error in tool %s", definition.name)
             # Odoo access errors etc. become tool errors so the client can react.
+            # Do not leak internal exception detail to the client; the full
+            # traceback is in the server log above.
             return self._audited_result(
                 definition,
                 arguments,
-                _error_tool_result("Tool execution failed: %s" % exc),
+                _error_tool_result("Tool execution failed."),
                 is_error=True,
                 error=str(exc),
                 duration_ms=int((time.time() - start) * 1000),

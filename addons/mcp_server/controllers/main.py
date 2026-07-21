@@ -115,6 +115,18 @@ class MCPController(http.Controller):
         session_header = request.httprequest.headers.get(constants.SESSION_HEADER)
         Session = env["mcp.session"].sudo()
         session = Session._resolve(session_header)
+        # Never let a caller attach a session that belongs to another user; the
+        # bearer token is the source of truth for identity, and a mismatched
+        # session would corrupt audit/session attribution.
+        if session and session.user_id.id != user.id:
+            session = None
+            if session_header and method != "initialize":
+                return _json_response(
+                    jsonrpc.make_error(msg_id, exceptions.JsonRpcError(
+                        exceptions.SESSION_REQUIRED,
+                        "Unknown or expired session; re-initialize").to_dict()),
+                    status=404,
+                )
         response_headers = {}
         if method == "initialize":
             if not session:

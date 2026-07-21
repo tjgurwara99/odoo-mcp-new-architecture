@@ -53,6 +53,15 @@ class McpModelAccess(models.Model):
         ("model_uniq", "unique(model_id)", "One access rule per model."),
     ]
 
+    # Generic ORM mutators that must never be reachable via odoo.call_action;
+    # they sidestep the create/write/unlink flags and writable_fields controls.
+    _FORBIDDEN_ACTIONS = frozenset({
+        "write", "create", "unlink", "copy", "read", "search", "search_read",
+        "browse", "read_group", "load", "export_data", "fields_get",
+        "toggle_active", "check_access_rights", "check_access_rule",
+        "sudo", "with_user", "with_context", "with_env", "with_company",
+    })
+
     @api.constrains("domain_filter")
     def _check_domain(self):
         for rec in self:
@@ -145,6 +154,13 @@ class McpModelAccess(models.Model):
         allowed = set(self._split(self.allowed_actions))
         if method.startswith("_"):
             raise ToolExecutionError("Private methods cannot be called via MCP.")
+        # Defence in depth: never allow generic ORM mutators / dunder-ish methods
+        # to be invoked through call_action, even if mis-configured into the
+        # allowlist. These bypass the field-level writable_fields controls.
+        if method in self._FORBIDDEN_ACTIONS:
+            raise ToolExecutionError(
+                "Method '%s' cannot be called via MCP call_action." % method
+            )
         if not allowed:
             raise ToolExecutionError(
                 "No actions are allow-listed for this model."

@@ -11,6 +11,7 @@ This module is *both* the Authorization Server and the Resource Server
 import base64
 import json
 import logging
+from urllib.parse import quote
 
 from odoo import http
 from odoo.http import request
@@ -138,9 +139,9 @@ class OAuthController(http.Controller):
             code_challenge_method=params.get("code_challenge_method") or "S256",
         )
         sep = "&" if "?" in redirect_uri else "?"
-        location = "%s%scode=%s" % (redirect_uri, sep, raw_code)
+        location = "%s%scode=%s" % (redirect_uri, sep, quote(raw_code, safe=""))
         if state:
-            location += "&state=%s" % state
+            location += "&state=%s" % quote(state, safe="")
         return request.redirect(location, local=False)
 
     def _validate_authorize_params(self, params):
@@ -164,9 +165,9 @@ class OAuthController(http.Controller):
         if not redirect_uri:
             return request.render("mcp_server.oauth_error", {"message": error})
         sep = "&" if "?" in redirect_uri else "?"
-        location = "%s%serror=%s" % (redirect_uri, sep, error)
+        location = "%s%serror=%s" % (redirect_uri, sep, quote(error, safe=""))
         if state:
-            location += "&state=%s" % state
+            location += "&state=%s" % quote(state, safe="")
         return request.redirect(location, local=False)
 
     # ------------------------------------------------------------------
