@@ -97,7 +97,7 @@ class OAuthController(http.Controller):
     # ------------------------------------------------------------------
     # Authorization endpoint (consent) — reuses Odoo login (auth="user")
     # ------------------------------------------------------------------
-    @http.route("/mcp/oauth/authorize", type="http", auth="user", methods=["GET"], csrf=False)
+    @http.route("/mcp/oauth/authorize", type="http", auth="user", methods=["GET"], csrf=False, website=True)
     def authorize(self, **params):
         error = self._validate_authorize_params(params)
         if error:
@@ -113,7 +113,7 @@ class OAuthController(http.Controller):
             "user": request.env.user,
         })
 
-    @http.route("/mcp/oauth/authorize/decision", type="http", auth="user", methods=["POST"], csrf=True)
+    @http.route("/mcp/oauth/authorize/decision", type="http", auth="user", methods=["POST"], csrf=True, website=True)
     def authorize_decision(self, **params):
         decision = params.get("decision")
         redirect_uri = params.get("redirect_uri")
