@@ -6,6 +6,10 @@ Thin wrappers over the standard ORM. Every tool executes as the authenticated
 no ``sudo`` anywhere. Write tools use the shared propose/confirm contract.
 Delivery-slip PDF links are produced via the core ``mcp.report.link`` facility.
 """
+from datetime import timedelta
+
+from odoo import fields
+
 from odoo.addons.mcp_server.mcp import constants
 from odoo.addons.mcp_server.mcp.exceptions import ToolExecutionError
 from odoo.addons.mcp_server.mcp.registry import tool
@@ -15,6 +19,10 @@ _GROUPS = ["mcp_server.group_mcp_user"]
 
 _DELIVERY_REPORT = "stock.action_report_delivery"
 _PICKING_STATES = ["draft", "waiting", "confirmed", "assigned", "done", "cancel"]
+
+# ``product_expiry`` adds these datetime fields to ``stock.production.lot``.
+_LOT_DATE_FIELDS = ["expiration_date", "use_date", "removal_date", "alert_date"]
+_DEFAULT_SOON_DAYS = 30
 
 _PICKING_FIELDS = [
     "id",
@@ -161,6 +169,42 @@ def _location_breakdown(env, product_id, arguments):
         )
     rows.sort(key=lambda r: r["qty_on_hand"], reverse=True)
     return rows
+
+
+# ---------------------------------------------------------------------------
+# expiry helpers
+# ---------------------------------------------------------------------------
+def _expiry_enabled(env):
+    """True when the ``product_expiry`` app is installed (lots carry dates)."""
+    return "expiration_date" in env["stock.production.lot"]._fields
+
+
+def _require_expiry(env):
+    if not _expiry_enabled(env):
+        raise ToolExecutionError(
+            "Expiration tracking is not enabled on this database. Install the "
+            "'Expiration Dates' app (product_expiry) to track lot/serial "
+            "expiry."
+        )
+
+
+def _lot_dates(lot):
+    """Serialise the product_expiry date fields of a lot (ISO strings)."""
+    out = {}
+    for fname in _LOT_DATE_FIELDS:
+        val = lot[fname]
+        out[fname] = fields.Datetime.to_string(val) if val else None
+    return out
+
+
+def _expiry_status(days, soon_days):
+    if days is None:
+        return "no_expiry"
+    if days < 0:
+        return "expired"
+    if days <= soon_days:
+        return "expiring_soon"
+    return "ok"
 
 
 def _pdf_filename(picking):
@@ -452,6 +496,268 @@ def list_locations(env, arguments):
         limit=limit, order="complete_name",
     )
     return {"locations": records, "returned": len(records)}
+
+
+@tool(
+    name="inventory.check_expiry",
+    description="Report on-hand stock that is expiring or already expired, based "
+    "on lot/serial expiration dates (requires the 'Expiration Dates' app). "
+    "Answers questions like 'is any stock about to expire and when'. Rows are "
+    "sorted soonest-expiry first. Filter by product text/id, scope to a "
+    "warehouse or location, limit to a number of days ahead ('within_days'), "
+    "optionally exclude already-expired stock, and group the result by lot "
+    "(default, shows where each expiring lot sits) or by product.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "query": {
+                "type": "string",
+                "description": "Matched against product name / internal reference / barcode",
+            },
+            "product_id": {"type": "integer", "description": "Specific product.product id"},
+            "warehouse_id": {"type": "integer"},
+            "location_id": {
+                "type": "integer",
+                "description": "Scope to this location (includes its sub-locations)",
+            },
+            "within_days": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Only include lots expiring on/before today + N days "
+                "(expired lots are still included unless include_expired is false). "
+                "Omit to include all lots that carry an expiration date.",
+            },
+            "include_expired": {
+                "type": "boolean",
+                "description": "Include lots whose expiration date has already passed "
+                "(default true).",
+            },
+            "only_on_hand": {
+                "type": "boolean",
+                "description": "Only count lots with a positive on-hand quantity in "
+                "scope (default true).",
+            },
+            "group_by": {
+                "type": "string",
+                "enum": ["lot", "product"],
+                "description": "Granularity of the returned rows (default 'lot').",
+            },
+            "limit": {"type": "integer", "minimum": 1, "maximum": 200},
+        },
+    },
+    category=constants.CATEGORY_READ,
+    required_groups=_GROUPS,
+    annotations={"readOnlyHint": True, "title": "Check stock expiry"},
+)
+def check_expiry(env, arguments):
+    _require_expiry(env)
+    Lot = env["stock.production.lot"]
+    today = fields.Date.context_today(env.user)
+    group_by = arguments.get("group_by") or "lot"
+    include_expired = arguments.get("include_expired", True)
+    only_on_hand = arguments.get("only_on_hand", True)
+    within_days = arguments.get("within_days")
+    within_days = int(within_days) if within_days is not None else None
+    soon_days = within_days if within_days is not None else _DEFAULT_SOON_DAYS
+    limit = min(int(arguments.get("limit") or 50), 200)
+
+    quant_domain = [
+        ("lot_id", "!=", False),
+        ("lot_id.expiration_date", "!=", False),
+    ]
+    if only_on_hand:
+        quant_domain.append(("quantity", ">", 0))
+    quant_domain += _quant_location_domain(env, arguments)
+    quant_domain += _quant_product_filter(arguments)
+
+    groups = env["stock.quant"].read_group(
+        quant_domain,
+        ["quantity:sum", "reserved_quantity:sum"],
+        ["lot_id", "location_id"],
+        lazy=False,
+    )
+
+    lot_cache = {}
+
+    def _lot(lot_id):
+        if lot_id not in lot_cache:
+            lot_cache[lot_id] = Lot.browse(lot_id)
+        return lot_cache[lot_id]
+
+    lot_rows = []
+    for g in groups:
+        if not g.get("lot_id") or not g.get("location_id"):
+            continue
+        lot = _lot(g["lot_id"][0])
+        exp = lot.expiration_date
+        if not exp:
+            continue
+        days = (exp.date() - today).days
+        if not include_expired and days < 0:
+            continue
+        if within_days is not None and days > within_days:
+            continue
+        on_hand = g.get("quantity") or 0.0
+        reserved = g.get("reserved_quantity") or 0.0
+        product = lot.product_id
+        row = {
+            "lot_id": lot.id,
+            "lot_name": lot.name,
+            "product_id": product.id,
+            "product": product.display_name,
+            "default_code": product.default_code or None,
+            "uom": product.uom_id.name,
+            "location_id": g["location_id"][0],
+            "location": g["location_id"][1],
+            "qty_on_hand": on_hand,
+            "qty_reserved": reserved,
+            "qty_available": on_hand - reserved,
+            "days_to_expiry": days,
+            "status": _expiry_status(days, soon_days),
+        }
+        row.update(_lot_dates(lot))
+        lot_rows.append(row)
+
+    lot_rows.sort(key=lambda r: (r["days_to_expiry"], -r["qty_on_hand"]))
+
+    expired_count = sum(1 for r in lot_rows if r["status"] == "expired")
+    expiring_soon_count = sum(1 for r in lot_rows if r["status"] == "expiring_soon")
+    nearest = lot_rows[0]["expiration_date"] if lot_rows else None
+
+    if group_by == "product":
+        prod_map = {}
+        for r in lot_rows:
+            entry = prod_map.get(r["product_id"])
+            if entry is None:
+                entry = {
+                    "product_id": r["product_id"],
+                    "product": r["product"],
+                    "default_code": r["default_code"],
+                    "uom": r["uom"],
+                    "qty_on_hand": 0.0,
+                    "qty_reserved": 0.0,
+                    "qty_available": 0.0,
+                    "expired_qty": 0.0,
+                    "lot_ids": set(),
+                    "nearest_days_to_expiry": r["days_to_expiry"],
+                    "nearest_expiration_date": r["expiration_date"],
+                }
+                prod_map[r["product_id"]] = entry
+            entry["qty_on_hand"] += r["qty_on_hand"]
+            entry["qty_reserved"] += r["qty_reserved"]
+            entry["qty_available"] += r["qty_available"]
+            if r["status"] == "expired":
+                entry["expired_qty"] += r["qty_on_hand"]
+            entry["lot_ids"].add(r["lot_id"])
+            if r["days_to_expiry"] < entry["nearest_days_to_expiry"]:
+                entry["nearest_days_to_expiry"] = r["days_to_expiry"]
+                entry["nearest_expiration_date"] = r["expiration_date"]
+        rows = []
+        for entry in prod_map.values():
+            entry["lot_count"] = len(entry.pop("lot_ids"))
+            entry["status"] = _expiry_status(
+                entry["nearest_days_to_expiry"], soon_days
+            )
+            rows.append(entry)
+        rows.sort(key=lambda r: (r["nearest_days_to_expiry"], -r["qty_on_hand"]))
+    else:
+        rows = lot_rows
+
+    rows = rows[:limit]
+
+    if arguments.get("location_id"):
+        scope = "location %s" % arguments["location_id"]
+    elif arguments.get("warehouse_id"):
+        scope = "warehouse %s" % arguments["warehouse_id"]
+    else:
+        scope = "all internal locations"
+
+    return {
+        "group_by": group_by,
+        "rows": rows,
+        "returned": len(rows),
+        "summary": {
+            "as_of": fields.Date.to_string(today),
+            "within_days": within_days,
+            "expired_lot_count": expired_count,
+            "expiring_soon_lot_count": expiring_soon_count,
+            "nearest_expiration_date": nearest,
+        },
+        "scope": scope,
+    }
+
+
+@tool(
+    name="inventory.get_lot",
+    description="Fetch full detail for one lot/serial number: its product, "
+    "expiration / use / removal / alert dates, expiry-alert flag, and a "
+    "per-location on-hand breakdown. Requires the 'Expiration Dates' app for "
+    "the date fields.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "id": {"type": "integer", "description": "stock.production.lot id"}
+        },
+        "required": ["id"],
+    },
+    category=constants.CATEGORY_READ,
+    required_groups=_GROUPS,
+    annotations={"readOnlyHint": True, "title": "Get lot / serial detail"},
+)
+def get_lot(env, arguments):
+    _require_expiry(env)
+    lot = env["stock.production.lot"].browse(int(arguments["id"]))
+    if not lot.exists():
+        raise ToolExecutionError("Lot %s not found" % arguments["id"])
+    lot.check_access_rule("read")
+
+    today = fields.Date.context_today(env.user)
+    exp = lot.expiration_date
+    days = (exp.date() - today).days if exp else None
+
+    groups = env["stock.quant"].read_group(
+        [
+            ("lot_id", "=", lot.id),
+            ("quantity", ">", 0),
+            ("location_id.usage", "=", "internal"),
+        ],
+        ["quantity:sum", "reserved_quantity:sum"],
+        ["location_id"],
+    )
+    by_location = []
+    total = 0.0
+    for g in groups:
+        if not g.get("location_id"):
+            continue
+        on_hand = g.get("quantity") or 0.0
+        reserved = g.get("reserved_quantity") or 0.0
+        total += on_hand
+        by_location.append(
+            {
+                "location_id": g["location_id"][0],
+                "location": g["location_id"][1],
+                "qty_on_hand": on_hand,
+                "qty_reserved": reserved,
+                "qty_available": on_hand - reserved,
+            }
+        )
+    by_location.sort(key=lambda r: r["qty_on_hand"], reverse=True)
+
+    data = {
+        "id": lot.id,
+        "name": lot.name,
+        "product_id": lot.product_id.id,
+        "product": lot.product_id.display_name,
+        "default_code": lot.product_id.default_code or None,
+        "company_id": lot.company_id.id or None,
+        "days_to_expiry": days,
+        "status": _expiry_status(days, _DEFAULT_SOON_DAYS),
+        "product_expiry_alert": bool(lot.product_expiry_alert),
+        "total_on_hand": total,
+        "by_location": by_location,
+    }
+    data.update(_lot_dates(lot))
+    return {"lot": data}
 
 
 # ---------------------------------------------------------------------------

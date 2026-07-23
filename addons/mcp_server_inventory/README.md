@@ -9,6 +9,8 @@ links.
 | Tool | Kind | Description |
 | --- | --- | --- |
 | `inventory.check_stock` | read | On-hand / forecast / available quantities; **on-hand products ranked first**, optional on-hand-only filter and per-location breakdown. |
+| `inventory.check_expiry` | read | Expired / expiring-soon on-hand stock from lot/serial expiration dates; grouped by lot or product, soonest-first. |
+| `inventory.get_lot` | read | Full detail for one lot/serial: expiration/use/removal/alert dates, alert flag, per-location on-hand breakdown. |
 | `inventory.search_transfers` | read | Find receipts / deliveries / internal transfers. |
 | `inventory.get_transfer` | read | Transfer detail incl. moves and a delivery-slip PDF link. |
 | `inventory.get_transfer_pdf` | read | Short-lived, tokenized delivery-slip PDF link. |
@@ -39,6 +41,13 @@ Tool names reach MCP clients in wire-safe form (e.g. `inventory_check_stock`).
   - `location_id` scopes to a location **and its sub-locations** (`child_of`);
     `warehouse_id` scopes to the warehouse's locations.
   - The response includes `on_hand_count` and `sorted_by: "on-hand first"`.
+- `check_expiry` / `get_lot` need the **Expiration Dates** app (`product_expiry`)
+  installed; without it they return a clear tool error rather than failing hard.
+  `check_expiry` reports on-hand lots that carry an expiration date, computing
+  `days_to_expiry` and a `status` of `expired` / `expiring_soon` / `ok`
+  (soon = `within_days` if given, else 30). Use `within_days` to bound the
+  window, `include_expired: false` to hide already-expired stock, and
+  `group_by: product` for a per-product roll-up (nearest expiry + lot count).
 - `validate_transfer` fills any missing done-quantities to demand, then
   validates (handling immediate-transfer / backorder wizards defensively).
 - `adjust_quantity` uses Odoo 16 inventory adjustments (`stock.quant`

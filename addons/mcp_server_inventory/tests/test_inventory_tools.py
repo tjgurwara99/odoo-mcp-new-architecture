@@ -4,6 +4,8 @@ from odoo.tests.common import TransactionCase, tagged
 from odoo.addons.mcp_server.mcp import exceptions
 from odoo.addons.mcp_server_inventory.tools import (
     check_stock,
+    check_expiry,
+    get_lot,
     search_transfers,
     get_transfer,
     get_transfer_pdf,
@@ -209,3 +211,115 @@ class TestInventoryTools(TransactionCase):
         pdf = get_transfer_pdf(self.env, {"id": pid})
         self.assertTrue(pdf["pdf_url"].startswith("https://example.test/mcp/report/"))
         self.assertIn(".pdf", pdf["filename"])
+
+
+@tagged("post_install", "-at_install")
+class TestInventoryExpiryTools(TransactionCase):
+    def setUp(self):
+        super().setUp()
+        if "expiration_date" not in self.env["stock.production.lot"]._fields:
+            self.skipTest("product_expiry (Expiration Dates) not installed")
+        self.warehouse = self.env["stock.warehouse"].search(
+            [("company_id", "=", self.env.company.id)], limit=1
+        )
+        self.stock_loc = self.warehouse.lot_stock_id
+        self.perishable = self.env["product.product"].create(
+            {
+                "name": "Perishable Widget",
+                "type": "product",
+                "tracking": "lot",
+                "use_expiration_date": True,
+            }
+        )
+
+    def _stock_lot(self, name, days_from_today, qty):
+        """Create a lot with an expiration N days out and put qty on hand."""
+        from datetime import datetime, time, timedelta
+
+        exp = datetime.combine(
+            datetime.today().date() + timedelta(days=days_from_today), time(12, 0)
+        )
+        lot = self.env["stock.production.lot"].create(
+            {
+                "name": name,
+                "product_id": self.perishable.id,
+                "company_id": self.env.company.id,
+                "expiration_date": exp,
+            }
+        )
+        quant = self.env["stock.quant"].with_context(inventory_mode=True).create(
+            {
+                "product_id": self.perishable.id,
+                "location_id": self.stock_loc.id,
+                "lot_id": lot.id,
+                "inventory_quantity": qty,
+            }
+        )
+        quant.action_apply_inventory()
+        return lot
+
+    def test_check_expiry_buckets_and_sorts(self):
+        self._stock_lot("EXP-EXPIRED", -5, 3)
+        self._stock_lot("EXP-SOON", 10, 4)
+        self._stock_lot("EXP-FAR", 400, 5)
+        result = check_expiry(self.env, {"product_id": self.perishable.id})
+        rows = result["rows"]
+        # soonest (expired) first
+        self.assertEqual(rows[0]["lot_name"], "EXP-EXPIRED")
+        self.assertEqual(rows[0]["status"], "expired")
+        statuses = {r["lot_name"]: r["status"] for r in rows}
+        self.assertEqual(statuses["EXP-SOON"], "expiring_soon")
+        self.assertEqual(statuses["EXP-FAR"], "ok")
+        self.assertEqual(result["summary"]["expired_lot_count"], 1)
+        self.assertEqual(result["summary"]["expiring_soon_lot_count"], 1)
+
+    def test_check_expiry_within_days_boundary(self):
+        self._stock_lot("W-IN", 7, 1)
+        self._stock_lot("W-OUT", 40, 1)
+        result = check_expiry(
+            self.env, {"product_id": self.perishable.id, "within_days": 30}
+        )
+        names = {r["lot_name"] for r in result["rows"]}
+        self.assertIn("W-IN", names)
+        self.assertNotIn("W-OUT", names)
+
+    def test_check_expiry_exclude_expired(self):
+        self._stock_lot("E-OLD", -3, 1)
+        self._stock_lot("E-NEW", 5, 1)
+        result = check_expiry(
+            self.env,
+            {"product_id": self.perishable.id, "include_expired": False},
+        )
+        names = {r["lot_name"] for r in result["rows"]}
+        self.assertNotIn("E-OLD", names)
+        self.assertIn("E-NEW", names)
+
+    def test_check_expiry_group_by_product(self):
+        self._stock_lot("G-A", 2, 3)
+        self._stock_lot("G-B", 20, 4)
+        result = check_expiry(
+            self.env,
+            {"product_id": self.perishable.id, "group_by": "product"},
+        )
+        self.assertEqual(result["group_by"], "product")
+        row = next(r for r in result["rows"] if r["product_id"] == self.perishable.id)
+        self.assertEqual(row["lot_count"], 2)
+        self.assertEqual(row["qty_on_hand"], 7.0)
+        self.assertEqual(row["nearest_days_to_expiry"], 2)
+
+    def test_get_lot_detail_and_breakdown(self):
+        lot = self._stock_lot("DETAIL-1", 15, 6)
+        result = get_lot(self.env, {"id": lot.id})
+        data = result["lot"]
+        self.assertEqual(data["id"], lot.id)
+        self.assertEqual(data["total_on_hand"], 6.0)
+        self.assertEqual(data["status"], "expiring_soon")
+        self.assertTrue(data["expiration_date"])
+        loc = next(
+            b for b in data["by_location"] if b["location_id"] == self.stock_loc.id
+        )
+        self.assertEqual(loc["qty_on_hand"], 6.0)
+
+    def test_get_lot_not_found(self):
+        with self.assertRaises(exceptions.ToolExecutionError):
+            get_lot(self.env, {"id": 999999999})

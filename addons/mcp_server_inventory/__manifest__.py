@@ -17,6 +17,11 @@ Read tools
 ----------
 * ``inventory.check_stock`` - on-hand / forecast / available quantities for
   products, optionally per warehouse or location.
+* ``inventory.check_expiry`` - on-hand stock that is expired or expiring soon,
+  from lot/serial expiration dates (needs the 'Expiration Dates' app),
+  grouped by lot or product and sorted soonest-first.
+* ``inventory.get_lot`` - full detail for one lot/serial (expiration / use /
+  removal / alert dates, alert flag, per-location on-hand breakdown).
 * ``inventory.search_transfers`` - find pickings (receipts, deliveries,
   internal transfers) with filters.
 * ``inventory.get_transfer`` - full transfer detail incl. moves and a
