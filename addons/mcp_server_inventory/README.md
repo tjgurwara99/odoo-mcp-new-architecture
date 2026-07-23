@@ -8,7 +8,7 @@ links.
 
 | Tool | Kind | Description |
 | --- | --- | --- |
-| `inventory.check_stock` | read | On-hand / forecast / available quantities, optionally per warehouse or location. |
+| `inventory.check_stock` | read | On-hand / forecast / available quantities; **on-hand products ranked first**, optional on-hand-only filter and per-location breakdown. |
 | `inventory.search_transfers` | read | Find receipts / deliveries / internal transfers. |
 | `inventory.get_transfer` | read | Transfer detail incl. moves and a delivery-slip PDF link. |
 | `inventory.get_transfer_pdf` | read | Short-lived, tokenized delivery-slip PDF link. |
@@ -29,6 +29,16 @@ Tool names reach MCP clients in wire-safe form (e.g. `inventory_check_stock`).
 - `create_transfer` derives source/destination from the picking type, falling
   back to the vendor/customer locations for receipts/deliveries. Pass
   `location_id` / `location_dest_id` to override.
+- `check_stock` **prioritises products that are on hand**: results are driven by
+  `stock.quant` and ordered with the most-stocked products first (within the
+  requested location/warehouse scope), then any zero-stock catalogue matches.
+  - `only_on_hand: true` returns only products with a positive on-hand quantity
+    in scope.
+  - `group_by_location: true` adds a `by_location` breakdown per product
+    (`location_id`, `qty_on_hand`, `qty_reserved`, `qty_available`).
+  - `location_id` scopes to a location **and its sub-locations** (`child_of`);
+    `warehouse_id` scopes to the warehouse's locations.
+  - The response includes `on_hand_count` and `sorted_by: "on-hand first"`.
 - `validate_transfer` fills any missing done-quantities to demand, then
   validates (handling immediate-transfer / backorder wizards defensively).
 - `adjust_quantity` uses Odoo 16 inventory adjustments (`stock.quant`

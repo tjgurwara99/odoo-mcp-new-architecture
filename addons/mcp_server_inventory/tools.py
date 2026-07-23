@@ -109,6 +109,60 @@ def _default_stock_location(env):
     return wh.lot_stock_id
 
 
+def _quant_location_domain(env, arguments):
+    """Restrict ``stock.quant`` to the requested scope (location > warehouse >
+    all internal locations)."""
+    if arguments.get("location_id"):
+        return [("location_id", "child_of", int(arguments["location_id"]))]
+    if arguments.get("warehouse_id"):
+        wh = env["stock.warehouse"].browse(int(arguments["warehouse_id"]))
+        if wh.exists() and wh.view_location_id:
+            return [("location_id", "child_of", wh.view_location_id.id)]
+    return [("location_id.usage", "=", "internal")]
+
+
+def _quant_product_filter(arguments):
+    """Same product text / id filter as the tool, expressed on ``stock.quant``."""
+    dom = []
+    if arguments.get("product_id"):
+        dom.append(("product_id", "=", int(arguments["product_id"])))
+    query = (arguments.get("query") or "").strip()
+    if query:
+        dom += [
+            "|", "|",
+            ("product_id.name", "ilike", query),
+            ("product_id.default_code", "ilike", query),
+            ("product_id.barcode", "ilike", query),
+        ]
+    return dom
+
+
+def _location_breakdown(env, product_id, arguments):
+    """Per-location on-hand breakdown for one product (locations with stock)."""
+    domain = [("product_id", "=", product_id), ("quantity", ">", 0)]
+    domain += _quant_location_domain(env, arguments)
+    groups = env["stock.quant"].read_group(
+        domain, ["quantity:sum", "reserved_quantity:sum"], ["location_id"]
+    )
+    rows = []
+    for g in groups:
+        if not g.get("location_id"):
+            continue
+        on_hand = g.get("quantity") or 0.0
+        reserved = g.get("reserved_quantity") or 0.0
+        rows.append(
+            {
+                "location_id": g["location_id"][0],
+                "location": g["location_id"][1],
+                "qty_on_hand": on_hand,
+                "qty_reserved": reserved,
+                "qty_available": on_hand - reserved,
+            }
+        )
+    rows.sort(key=lambda r: r["qty_on_hand"], reverse=True)
+    return rows
+
+
 def _pdf_filename(picking):
     return "Delivery Slip - %s.pdf" % (picking.name or picking.id).replace("/", "-")
 
@@ -151,8 +205,10 @@ _MOVES_SCHEMA = {
 @tool(
     name="inventory.check_stock",
     description="Check stock quantities (on hand, forecast, available) for "
-    "storable products. Filter by product text and optionally scope to a "
-    "warehouse or a specific location.",
+    "storable products. Products that are on hand are prioritised (returned "
+    "first, most stock first). Filter by product text, optionally scope to a "
+    "warehouse or location, restrict to on-hand only, and/or break the on-hand "
+    "quantity down per location.",
     input_schema={
         "type": "object",
         "properties": {
@@ -162,7 +218,20 @@ _MOVES_SCHEMA = {
             },
             "product_id": {"type": "integer", "description": "Specific product.product id"},
             "warehouse_id": {"type": "integer"},
-            "location_id": {"type": "integer"},
+            "location_id": {
+                "type": "integer",
+                "description": "Scope to this location (includes its sub-locations)",
+            },
+            "only_on_hand": {
+                "type": "boolean",
+                "description": "Only return products with a positive on-hand "
+                "quantity in scope (default false).",
+            },
+            "group_by_location": {
+                "type": "boolean",
+                "description": "Include a per-location on-hand breakdown "
+                "('by_location') for each product (default false).",
+            },
             "limit": {"type": "integer", "minimum": 1, "maximum": 100},
         },
     },
@@ -171,6 +240,10 @@ _MOVES_SCHEMA = {
     annotations={"readOnlyHint": True, "title": "Check stock"},
 )
 def check_stock(env, arguments):
+    only_on_hand = bool(arguments.get("only_on_hand"))
+    group_by_location = bool(arguments.get("group_by_location"))
+    limit = min(int(arguments.get("limit") or 20), 100)
+
     ctx = {}
     if arguments.get("warehouse_id"):
         ctx["warehouse"] = int(arguments["warehouse_id"])
@@ -178,33 +251,63 @@ def check_stock(env, arguments):
         ctx["location"] = int(arguments["location_id"])
     Product = env["product.product"].with_context(**ctx)
 
-    domain = [("type", "=", "product")]
-    if arguments.get("product_id"):
-        domain.append(("id", "=", int(arguments["product_id"])))
-    query = (arguments.get("query") or "").strip()
-    if query:
-        domain += [
-            "|", "|",
-            ("name", "ilike", query),
-            ("default_code", "ilike", query),
-            ("barcode", "ilike", query),
-        ]
-    limit = min(int(arguments.get("limit") or 20), 100)
-    products = Product.search(domain, limit=limit, order="name")
-    rows = []
-    for p in products:
-        rows.append(
-            {
-                "id": p.id,
-                "name": p.display_name,
-                "default_code": p.default_code or None,
-                "uom": p.uom_id.name,
-                "qty_on_hand": p.qty_available,
-                "qty_forecast": p.virtual_available,
-                "qty_available": p.free_qty,
-            }
+    # Rank products with stock on hand first, by quantity within the requested
+    # scope. Driven by stock.quant so the ordering reflects real on-hand and we
+    # do not have to scan the whole catalogue.
+    quant_domain = [("quantity", ">", 0)]
+    quant_domain += _quant_location_domain(env, arguments)
+    quant_domain += _quant_product_filter(arguments)
+    grouped = env["stock.quant"].read_group(
+        quant_domain, ["product_id", "quantity:sum"], ["product_id"]
+    )
+    grouped.sort(key=lambda g: g.get("quantity") or 0.0, reverse=True)
+    onhand_ids = [g["product_id"][0] for g in grouped if g.get("product_id")]
+
+    ordered_ids = onhand_ids[:limit]
+
+    # Optionally pad with matching storable products that have no stock in scope
+    # (they rank last), so callers still see catalogue items unless they asked
+    # for on-hand only.
+    if not only_on_hand and len(ordered_ids) < limit:
+        domain = [("type", "=", "product"), ("id", "not in", onhand_ids)]
+        if arguments.get("product_id"):
+            domain.append(("id", "=", int(arguments["product_id"])))
+        query = (arguments.get("query") or "").strip()
+        if query:
+            domain += [
+                "|", "|",
+                ("name", "ilike", query),
+                ("default_code", "ilike", query),
+                ("barcode", "ilike", query),
+            ]
+        remaining = Product.search(
+            domain, limit=limit - len(ordered_ids), order="name"
         )
-    return {"products": rows, "returned": len(rows), "scope": ctx or "all locations"}
+        ordered_ids = ordered_ids + remaining.ids
+
+    rows = []
+    for pid in ordered_ids:
+        p = Product.browse(pid)
+        row = {
+            "id": p.id,
+            "name": p.display_name,
+            "default_code": p.default_code or None,
+            "uom": p.uom_id.name,
+            "qty_on_hand": p.qty_available,
+            "qty_forecast": p.virtual_available,
+            "qty_available": p.free_qty,
+        }
+        if group_by_location:
+            row["by_location"] = _location_breakdown(env, p.id, arguments)
+        rows.append(row)
+
+    return {
+        "products": rows,
+        "returned": len(rows),
+        "on_hand_count": len(onhand_ids),
+        "scope": ctx or "all internal locations",
+        "sorted_by": "on-hand first",
+    }
 
 
 @tool(

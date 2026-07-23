@@ -18,6 +18,23 @@ class TestReportLink(TransactionCase):
         url = self.Link.mint("dummy.report", self.partner, filename="x.pdf")
         self.assertTrue(url.startswith("https://example.test/mcp/report/"))
 
+    def test_mint_attachment_roundtrip(self):
+        attach = self.env["ir.attachment"].create(
+            {"name": "report.pdf", "mimetype": "application/pdf",
+             "datas": b"ZmFrZQ=="}
+        )
+        url = self.Link.mint_attachment(attach, filename="report.pdf")
+        self.assertTrue(url.startswith("https://example.test/mcp/report/"))
+        link = self.Link._resolve(url.rsplit("/", 1)[1])
+        self.assertTrue(link)
+        self.assertEqual(link.kind, "attachment")
+        self.assertEqual(link.attachment_id, attach)
+        self.assertEqual(link.filename, "report.pdf")
+
+    def test_mint_attachment_requires_attachment(self):
+        with self.assertRaises(ToolExecutionError):
+            self.Link.mint_attachment(self.env["ir.attachment"])
+
     def test_mint_and_resolve_roundtrip(self):
         url = self.Link.mint("dummy.report", self.partner)
         raw = url.rsplit("/", 1)[1]

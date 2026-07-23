@@ -91,6 +91,55 @@ class TestInventoryTools(TransactionCase):
         result = check_stock(self.env, {"query": "Svc2"})
         self.assertEqual(result["returned"], 0)
 
+    def test_check_stock_prioritises_on_hand(self):
+        # Two storable products share a searchable token; only one has stock.
+        stocked = self.env["product.product"].create(
+            {"name": "Priority Widget A", "type": "product"}
+        )
+        self.env["product.product"].create(
+            {"name": "Priority Widget B", "type": "product"}
+        )
+        self._run(
+            adjust_quantity,
+            {"product_id": stocked.id, "quantity": 5, "location_id": self.stock_loc.id},
+        )
+        result = check_stock(self.env, {"query": "Priority Widget"})
+        # On-hand product must come first.
+        self.assertEqual(result["products"][0]["id"], stocked.id)
+        self.assertEqual(result["on_hand_count"], 1)
+
+    def test_check_stock_only_on_hand_filters_zero(self):
+        stocked = self.env["product.product"].create(
+            {"name": "OnHand Only A", "type": "product"}
+        )
+        self.env["product.product"].create(
+            {"name": "OnHand Only B", "type": "product"}
+        )
+        self._run(
+            adjust_quantity,
+            {"product_id": stocked.id, "quantity": 3, "location_id": self.stock_loc.id},
+        )
+        result = check_stock(
+            self.env, {"query": "OnHand Only", "only_on_hand": True}
+        )
+        ids = {r["id"] for r in result["products"]}
+        self.assertEqual(ids, {stocked.id})
+
+    def test_check_stock_group_by_location(self):
+        self._run(
+            adjust_quantity,
+            {"product_id": self.widget.id, "quantity": 9, "location_id": self.stock_loc.id},
+        )
+        result = check_stock(
+            self.env, {"product_id": self.widget.id, "group_by_location": True}
+        )
+        row = next(r for r in result["products"] if r["id"] == self.widget.id)
+        self.assertIn("by_location", row)
+        loc = next(
+            b for b in row["by_location"] if b["location_id"] == self.stock_loc.id
+        )
+        self.assertEqual(loc["qty_on_hand"], 9.0)
+
     # -- transfers -----------------------------------------------------------
     def test_create_receipt_requires_moves(self):
         with self.assertRaises(exceptions.ToolExecutionError):

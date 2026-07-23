@@ -11,3 +11,5 @@ odoo.conf
 .pytest_cache/
 .vscode/
 .idea/
+
+singhs-addons/

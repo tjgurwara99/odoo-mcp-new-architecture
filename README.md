@@ -15,6 +15,8 @@ See [PLAN.md](./PLAN.md) for the full architecture and delivery plan.
 - `addons/mcp_server_accounting` — Invoicing/Accounting tools.
 - `addons/mcp_server_inventory` — Inventory/Stock tools.
 - `addons/mcp_server_contacts` — Contacts/Partners tools.
+- `addons/mcp_server_reports_designer` — expose GTECH Report Designer
+  (`reports.designer`) custom reports as short-lived PDF download links.
 
 ## Status
 

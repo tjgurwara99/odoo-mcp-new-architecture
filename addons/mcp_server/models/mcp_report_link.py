@@ -14,6 +14,13 @@ Design / security:
   specific set of record ids. When the link is downloaded, the PDF is rendered
   in an environment scoped to that user, so normal ACL / record rules apply
   (the link never widens access).
+* Two flavours are supported:
+  - ``qweb`` (default): the document is re-rendered on demand from a QWeb
+    ``ir.actions.report`` and a set of record ids.
+  - ``attachment``: the document was generated up-front (e.g. an XLSX/PDF built
+    by a report engine that cannot be re-rendered from a QWeb ref) and stored
+    as an ``ir.attachment``; the link streams that stored file. The attachment
+    is created as the minting user, so ACL still applies at download.
 * Links expire (``mcp_server.report_link_ttl``, default 1h) and are GC'd by
   cron. They are bearer URLs (like Odoo share links) — short TTL is the control.
 * ``mint`` performs an up-front ``check_access_rule('read')`` as the caller, so
@@ -35,6 +42,18 @@ class McpReportLink(models.Model):
     token_hash = fields.Char(required=True, index=True, readonly=True)
     user_id = fields.Many2one(
         "res.users", required=True, ondelete="cascade", readonly=True
+    )
+    kind = fields.Selection(
+        [("qweb", "QWeb report"), ("attachment", "Stored attachment")],
+        required=True,
+        default="qweb",
+        readonly=True,
+        help="qweb: re-rendered on demand from a report ref; attachment: streams "
+        "a pre-generated ir.attachment.",
+    )
+    attachment_id = fields.Many2one(
+        "ir.attachment", ondelete="cascade", readonly=True,
+        help="Pre-generated document served for 'attachment' links.",
     )
     report_ref = fields.Char(
         required=True, readonly=True,
@@ -96,6 +115,48 @@ class McpReportLink(models.Model):
                 "model_name": records._name,
                 "res_ids_json": json.dumps(records.ids),
                 "filename": filename or "report.pdf",
+                "expires_at": fields.Datetime.add(
+                    fields.Datetime.now(), seconds=ttl
+                ),
+            }
+        )
+        return "%s/mcp/report/%s" % (base, raw)
+
+    def mint_attachment(self, attachment, filename=None, ttl=None):
+        """Create a download link streaming a pre-generated ``ir.attachment``.
+
+        Used by report engines that build the document up-front (e.g. XLSX/PDF)
+        rather than re-rendering a QWeb report on demand. ``attachment`` must be
+        a single ``ir.attachment`` the *current* user can read. Raises
+        ``ToolExecutionError`` on empty input, missing base URL, or no read
+        access.
+        """
+        if not attachment:
+            raise ToolExecutionError("No attachment to serve.")
+        attachment.ensure_one()
+        # Enforce read access as the calling user before issuing any link.
+        attachment.check_access_rights("read")
+        attachment.check_access_rule("read")
+
+        base = self._base_url()
+        if not base:
+            raise ToolExecutionError(
+                "Public Base URL is not configured; cannot build a report link. "
+                "Set it in Settings > MCP Server."
+            )
+
+        raw = tok.generate_token()
+        ttl = int(ttl) if ttl else self._ttl()
+        self.sudo().create(
+            {
+                "token_hash": tok.hash_secret(raw),
+                "user_id": self.env.uid,
+                "kind": "attachment",
+                "attachment_id": attachment.id,
+                "report_ref": attachment.name or "attachment",
+                "model_name": "ir.attachment",
+                "res_ids_json": json.dumps([attachment.id]),
+                "filename": filename or attachment.name or "report",
                 "expires_at": fields.Datetime.add(
                     fields.Datetime.now(), seconds=ttl
                 ),
