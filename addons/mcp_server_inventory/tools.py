@@ -20,7 +20,7 @@ _GROUPS = ["mcp_server.group_mcp_user"]
 _DELIVERY_REPORT = "stock.action_report_delivery"
 _PICKING_STATES = ["draft", "waiting", "confirmed", "assigned", "done", "cancel"]
 
-# ``product_expiry`` adds these datetime fields to ``stock.production.lot``.
+# ``product_expiry`` adds these datetime fields to ``stock.lot``.
 _LOT_DATE_FIELDS = ["expiration_date", "use_date", "removal_date", "alert_date"]
 _DEFAULT_SOON_DAYS = 30
 
@@ -175,8 +175,14 @@ def _location_breakdown(env, product_id, arguments):
 # expiry helpers
 # ---------------------------------------------------------------------------
 def _expiry_enabled(env):
-    """True when the ``product_expiry`` app is installed (lots carry dates)."""
-    return "expiration_date" in env["stock.production.lot"]._fields
+    """True when the ``product_expiry`` app is installed (lots carry dates).
+
+    Odoo 16 renamed ``stock.production.lot`` to ``stock.lot``; guard against the
+    model being absent so this never raises a raw ``KeyError``.
+    """
+    if "stock.lot" not in env:
+        return False
+    return "expiration_date" in env["stock.lot"]._fields
 
 
 def _require_expiry(env):
@@ -551,7 +557,7 @@ def list_locations(env, arguments):
 )
 def check_expiry(env, arguments):
     _require_expiry(env)
-    Lot = env["stock.production.lot"]
+    Lot = env["stock.lot"]
     today = fields.Date.context_today(env.user)
     group_by = arguments.get("group_by") or "lot"
     include_expired = arguments.get("include_expired", True)
@@ -696,7 +702,7 @@ def check_expiry(env, arguments):
     input_schema={
         "type": "object",
         "properties": {
-            "id": {"type": "integer", "description": "stock.production.lot id"}
+            "id": {"type": "integer", "description": "stock.lot id"}
         },
         "required": ["id"],
     },
@@ -706,7 +712,7 @@ def check_expiry(env, arguments):
 )
 def get_lot(env, arguments):
     _require_expiry(env)
-    lot = env["stock.production.lot"].browse(int(arguments["id"]))
+    lot = env["stock.lot"].browse(int(arguments["id"]))
     if not lot.exists():
         raise ToolExecutionError("Lot %s not found" % arguments["id"])
     lot.check_access_rule("read")

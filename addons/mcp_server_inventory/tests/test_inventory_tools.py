@@ -217,7 +217,9 @@ class TestInventoryTools(TransactionCase):
 class TestInventoryExpiryTools(TransactionCase):
     def setUp(self):
         super().setUp()
-        if "expiration_date" not in self.env["stock.production.lot"]._fields:
+        if "stock.lot" not in self.env or (
+            "expiration_date" not in self.env["stock.lot"]._fields
+        ):
             self.skipTest("product_expiry (Expiration Dates) not installed")
         self.warehouse = self.env["stock.warehouse"].search(
             [("company_id", "=", self.env.company.id)], limit=1
@@ -239,7 +241,7 @@ class TestInventoryExpiryTools(TransactionCase):
         exp = datetime.combine(
             datetime.today().date() + timedelta(days=days_from_today), time(12, 0)
         )
-        lot = self.env["stock.production.lot"].create(
+        lot = self.env["stock.lot"].create(
             {
                 "name": name,
                 "product_id": self.perishable.id,
