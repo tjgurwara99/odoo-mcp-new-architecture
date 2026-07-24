@@ -15,6 +15,7 @@ tools for Invoicing / Accounting, plus downloadable invoice PDF links.
 | `accounting.list_products` | read | Products with sales & cost price for building invoices. |
 | `accounting.get_invoice_pdf` | read | Short-lived, tokenized invoice PDF link. |
 | `accounting.create_customer_invoice` | write | Create a draft customer invoice with lines. |
+| `accounting.create_vendor_bill` | write | Create a standalone draft vendor bill with lines. |
 | `accounting.post_invoice` | write | Post (validate) a draft invoice. |
 | `accounting.register_payment` | write | Register a payment against a posted invoice. |
 
@@ -32,6 +33,9 @@ Tool names reach MCP clients in wire-safe form (e.g. `accounting_get_invoice`).
 - `create_customer_invoice` builds `out_invoice` moves; each line takes a
   `product_id` (drives account/taxes/price) or a free-text `description`, with an
   optional `quantity` / `price_unit` override.
+- `create_vendor_bill` builds `in_invoice` moves the same way, for supplier
+  invoices not tied to a purchase order (for a PO-driven bill, use
+  `purchase.create_vendor_bill` in the Purchase add-on).
 - `register_payment` drives the standard `account.payment.register` wizard,
   defaulting to the full residual amount and the default bank/cash journal.
 - Invoice PDF links use the core `mcp.report.link` facility

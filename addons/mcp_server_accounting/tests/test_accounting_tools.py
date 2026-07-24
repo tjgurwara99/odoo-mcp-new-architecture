@@ -11,6 +11,7 @@ from odoo.addons.mcp_server_accounting.tools import (
     list_products,
     get_invoice_pdf,
     create_customer_invoice,
+    create_vendor_bill,
     post_invoice,
     register_payment,
 )
@@ -58,6 +59,30 @@ class TestAccountingTools(TransactionCase):
         return post_invoice(
             self.env, {"invoice_id": move.id, "confirmation_token": token}
         )
+
+    def test_create_vendor_bill(self):
+        args = {
+            "partner_id": self.partner.id,
+            "invoice_lines": [{"product_id": self.widget.id, "quantity": 3}],
+            "ref": "INV-2024-42",
+            "invoice_date": "2024-02-01",
+        }
+        token = self._propose(create_vendor_bill, args)
+        result = create_vendor_bill(self.env, dict(args, confirmation_token=token))
+        self.assertTrue(result["created"])
+        move = self.env["account.move"].browse(result["invoice"]["id"])
+        self.assertEqual(move.move_type, "in_invoice")
+        self.assertEqual(move.state, "draft")
+        self.assertEqual(move.ref, "INV-2024-42")
+        # A created vendor bill can be posted through the shared post tool.
+        self._post(move)
+        self.assertEqual(move.state, "posted")
+
+    def test_create_vendor_bill_requires_a_line(self):
+        with self.assertRaises(exceptions.ToolExecutionError):
+            create_vendor_bill(
+                self.env, {"partner_id": self.partner.id, "invoice_lines": []}
+            )
 
     # -- products ------------------------------------------------------------
     def test_list_products(self):

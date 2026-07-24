@@ -12,6 +12,7 @@ See [PLAN.md](./PLAN.md) for the full architecture and delivery plan.
 - `addons/mcp_server` — core: MCP protocol engine, OAuth 2.1 provider,
   generic model access engine, confirmation-token workflow, audit log.
 - `addons/mcp_server_sales` — Sales orders/quotations tools.
+- `addons/mcp_server_purchase` — Purchase RFQ/orders tools.
 - `addons/mcp_server_accounting` — Invoicing/Accounting tools.
 - `addons/mcp_server_inventory` — Inventory/Stock tools.
 - `addons/mcp_server_contacts` — Contacts/Partners tools.

@@ -516,6 +516,74 @@ def create_customer_invoice(env, arguments):
 
 
 @tool(
+    name="accounting.create_vendor_bill",
+    description="Create a draft vendor bill for a vendor with one or more lines. "
+    "Use this to record a supplier's invoice that is not tied to a purchase "
+    "order (for a PO-driven bill, use purchase.create_vendor_bill). Two-step: "
+    "first call previews and returns a confirmation_token; re-call with the same "
+    "arguments plus the token to create it.",
+    input_schema={
+        "type": "object",
+        "properties": {
+            "partner_id": {"type": "integer", "description": "Vendor res.partner id"},
+            "invoice_lines": _INVOICE_LINE_SCHEMA,
+            "invoice_date": {
+                "type": "string",
+                "description": "Bill date as printed on the vendor invoice "
+                "(YYYY-MM-DD)",
+            },
+            "invoice_date_due": {"type": "string", "description": "Due date (YYYY-MM-DD)"},
+            "ref": {
+                "type": "string",
+                "description": "Vendor's bill reference / invoice number",
+            },
+            "invoice_origin": {"type": "string", "description": "Source document"},
+            "narration": {"type": "string", "description": "Internal note / terms"},
+            "confirmation_token": {"type": "string"},
+        },
+        "required": ["partner_id", "invoice_lines"],
+    },
+    category=constants.CATEGORY_WRITE,
+    is_write=True,
+    required_groups=_GROUPS,
+    annotations={
+        "readOnlyHint": False,
+        "destructiveHint": False,
+        "idempotentHint": False,
+        "title": "Create a vendor bill",
+    },
+)
+def create_vendor_bill(env, arguments):
+    partner = env["res.partner"].browse(int(arguments["partner_id"]))
+    if not partner.exists():
+        raise ToolExecutionError("Vendor %s not found" % arguments["partner_id"])
+    lines_in = arguments.get("invoice_lines") or []
+    if not lines_in:
+        raise ToolExecutionError("Provide at least one bill line.")
+    commands = [_line_command(env, li) for li in lines_in]
+
+    move_vals = {
+        "move_type": "in_invoice",
+        "partner_id": partner.id,
+        "invoice_line_ids": commands,
+    }
+    for key in ("invoice_date", "invoice_date_due", "ref", "invoice_origin", "narration"):
+        if arguments.get(key):
+            move_vals[key] = arguments[key]
+
+    preview = "Will CREATE a draft vendor bill for %s with %d line(s)." % (
+        partner.display_name,
+        len(commands),
+    )
+    env["mcp.action.confirmation"].require(
+        "accounting.create_vendor_bill", arguments, preview
+    )
+
+    move = env["account.move"].create(move_vals)
+    return {"created": True, "invoice": _invoice_detail(env, move)}
+
+
+@tool(
     name="accounting.post_invoice",
     description="Post (validate) a draft invoice / bill / credit note, moving it "
     "from draft to posted. Two-step propose/confirm.",
